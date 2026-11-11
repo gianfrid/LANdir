@@ -2,24 +2,334 @@
 """File Drop Server - a simple LAN file upload server.
 
 Usage:
-    python3 file_drop_server.py [port] [uploads_dir]
+    python3 file-drop-server.py [--port PORT] [--dir UPLOADS_DIR] [--secret]
 
 Defaults: port 8000, uploads in ./uploads next to the script.
-Then open http://<your-linux-box-ip>:8000 from any device on the same
-network (e.g. an Android phone) and drag files in.
+At startup the server prints the address to open from any device on the
+same network (e.g. an Android phone), rendered as a scannable QR code.
+With --secret the pages live under a random unguessable URL path; the QR
+code encodes that full path, and requests to any other path get a 404.
 """
 
-import html
+import argparse
 import os
 import re
+import secrets
 import sys
 import socket
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-UPLOAD_DIR = os.path.abspath(sys.argv[2] if len(sys.argv) > 2 else "uploads")
+
+def _parse_args():
+    parser = argparse.ArgumentParser(
+        description="LAN file upload server",
+        usage="%(prog)s [--port PORT] [--dir UPLOADS_DIR] [--secret]")
+    parser.add_argument("--port", type=int, default=8000,
+                        help="port to listen on (default: 8000)")
+    parser.add_argument("--dir", metavar="UPLOADS_DIR", default="uploads",
+                        help="directory where uploaded files are stored "
+                             "(default: ./uploads)")
+    parser.add_argument("--secret", action="store_true",
+                        help="serve under a random URL path (generated per "
+                             "run); included in the printed QR code")
+    return parser.parse_args()
+
+
+ARGS = _parse_args()
+PORT = ARGS.port
+UPLOAD_DIR = os.path.abspath(ARGS.dir)
+# token_urlsafe() is URL-path-safe and ~128 bits of entropy
+SECRET_TOKEN = secrets.token_urlsafe(16) if ARGS.secret else None
+PAGE_PATH = f"/{SECRET_TOKEN}/" if SECRET_TOKEN else "/"
+UPLOAD_PATH = f"/{SECRET_TOKEN}/upload" if SECRET_TOKEN else "/upload"
+
+
+# --- Minimal QR code encoder (byte mode, EC level M, versions 1-6) ----------
+# Self-contained implementation of the QR spec so the server stays
+# zero-dependency. Versions 1-6 hold up to 106 bytes, enough for the URL.
+
+QR_BLOCKS = {  # version -> (ec codewords per block, data codewords per block)
+    1: (10, [16]), 2: (16, [28]), 3: (26, [44]),
+    4: (18, [32, 32]), 5: (24, [43, 43]), 6: (16, [27, 27, 27, 27]),
+}
+
+
+def _gf_tables():
+    """exp/log tables for GF(256), QR polynomial x^8+x^4+x^3+x^2+1."""
+    exp, log = [0] * 512, [0] * 256
+    x = 1
+    for i in range(255):
+        exp[i], log[x] = x, i
+        x <<= 1
+        if x & 0x100:
+            x ^= 0x11D
+    for i in range(255, 512):
+        exp[i] = exp[i - 255]
+    return exp, log
+
+
+_GEXP, _GLOG = _gf_tables()
+
+
+def _gmul(a, b):
+    if a == 0 or b == 0:
+        return 0
+    return _GEXP[_GLOG[a] + _GLOG[b]]
+
+
+def _rs_generator(dcount):
+    """Generator polynomial prod(x - a^i), coefficients MSB-first."""
+    g = [1]
+    for i in range(dcount):
+        ng = [0] * (len(g) + 1)
+        for j, c in enumerate(g):
+            ng[j] ^= c
+            ng[j + 1] ^= _gmul(c, _GEXP[i])
+        g = ng
+    return g
+
+
+def _rs_remainder(block, gen):
+    res = list(block) + [0] * (len(gen) - 1)
+    for i in range(len(block)):
+        coef = res[i]
+        if coef:
+            for j in range(1, len(gen)):
+                res[i + j] ^= _gmul(gen[j], coef)
+    return res[len(block):]
+
+
+def _qr_codewords(data):
+    """Byte-mode bit stream for `data`, returns (version, interleaved cw)."""
+    for version, (ec_count, blocks) in QR_BLOCKS.items():
+        if len(data) <= (sum(blocks) * 8 - 12) // 8:  # 12 = mode+count bits
+            break
+    else:
+        raise ValueError("text too long for QR versions 1-6")
+    dcw_count = sum(blocks)
+
+    bits = []
+
+    def put(value, count):
+        for i in range(count - 1, -1, -1):
+            bits.append((value >> i) & 1)
+
+    put(0b0100, 4)             # byte mode
+    put(len(data), 8)          # char count (8 bits for versions 1-9)
+    for b in data:
+        put(b, 8)
+    put(0, min(4, dcw_count * 8 - len(bits)))  # terminator
+
+    data_cw = []
+    while bits:
+        bits.extend([0] * (8 - len(bits)))  # pad to byte boundary
+        data_cw.append(int("".join(map(str, bits[:8])), 2))
+        bits = bits[8:]
+    pad = 0xEC
+    while len(data_cw) < dcw_count:        # standard alternating pad codewords
+        data_cw.append(pad)
+        pad = 0x11 if pad == 0xEC else 0xEC
+
+    # split into blocks, compute ECC per block, interleave both streams
+    gen = _rs_generator(ec_count)
+    data_blocks, ec_blocks = [], []
+    offset = 0
+    for blen in blocks:
+        block = data_cw[offset:offset + blen]
+        offset += blen
+        data_blocks.append(block)
+        ec_blocks.append(_rs_remainder(block, gen))
+
+    out = []
+    for i in range(max(blocks)):
+        for block in data_blocks:
+            if i < len(block):
+                out.append(block[i])
+    for i in range(ec_count):
+        for block in ec_blocks:
+            out.append(block[i])
+    return version, out
+
+
+def _mask_bit(mask, r, c):
+    return (
+        (r + c) % 2 == 0 if mask == 0 else
+        r % 2 == 0 if mask == 1 else
+        c % 3 == 0 if mask == 2 else
+        (r + c) % 3 == 0 if mask == 3 else
+        (r // 2 + c // 3) % 2 == 0 if mask == 4 else
+        (r * c) % 2 + (r * c) % 3 == 0 if mask == 5 else
+        ((r * c) % 2 + (r * c) % 3) % 2 == 0 if mask == 6 else
+        ((r + c) % 2 + (r * c) % 3) % 2 == 0
+    )
+
+
+def _qr_function_patterns(version):
+    """Grid with finder/alignment/timing/layout patterns already drawn."""
+    n = 17 + 4 * version
+    grid = [[False] * n for _ in range(n)]
+    reserved = [[False] * n for _ in range(n)]
+
+    def setm(r, c, dark):
+        if not (0 <= r < n and 0 <= c < n):
+            return
+        grid[r][c] = dark
+        reserved[r][c] = True
+
+    for r0, c0 in ((0, 0), (0, n - 7), (n - 7, 0)):  # finders + separators
+        for dr in range(-1, 8):
+            for dc in range(-1, 8):
+                dark = (0 <= dr < 7 and 0 <= dc < 7 and
+                        max(abs(dr - 3), abs(dc - 3)) != 2)
+                setm(r0 + dr, c0 + dc, dark)
+
+    if version >= 2:  # alignment pattern (v1-6 have exactly one, bottom-right)
+        ar = ac = n - 7
+        for dr in range(-2, 3):
+            for dc in range(-2, 3):
+                setm(ar + dr, ac + dc, max(abs(dr), abs(dc)) != 1)
+
+    for i in range(8, n - 8):  # timing patterns
+        setm(6, i, i % 2 == 0)
+        setm(i, 6, i % 2 == 0)
+
+    setm(n - 8, 8, True)  # dark module
+
+    # format info cells (values drawn per mask after choosing it)
+    for i in range(6):
+        reserved[i][8] = True
+    reserved[7][8] = reserved[8][8] = reserved[8][7] = True
+    for i in range(9, 15):
+        reserved[8][14 - i] = True
+    for i in range(8):
+        reserved[8][n - 1 - i] = True
+    for i in range(8, 15):
+        reserved[n - 15 + i][8] = True
+    return grid, reserved
+
+
+def _place_data(grid, reserved, codewords):
+    n = len(grid)
+    bitseq = [(cw >> (7 - b)) & 1 for cw in codewords for b in range(8)]
+    i = 0
+    right = n - 1
+    while right >= 1:  # zigzag through column pairs, skipping the timing col
+        upward = ((right + 1) & 2) == 0
+        for vert in range(n):
+            r = (n - 1 - vert) if upward else vert
+            for dc in range(2):
+                c = right - dc
+                if not reserved[r][c] and i < len(bitseq):
+                    grid[r][c] = bool(bitseq[i])
+                    i += 1
+        right = 5 if right == 8 else right - 2
+
+
+def _draw_format(grid, mask):
+    """Format info: EC level M (00) + mask, BCH-coded (15 bits), two copies."""
+    n = len(grid)
+    v = mask  # 00 << 3 | mask: EC level M is indicator 00
+    rem = v
+    for _ in range(10):
+        rem = (rem << 1) ^ ((rem >> 9) * 0x537)
+    bits = ((v << 10) | rem) ^ 0x5412
+
+    def bit(i):
+        return bool((bits >> i) & 1)
+
+    for i in range(6):
+        grid[i][8] = bit(i)
+    for i in range(8):
+        grid[8][n - 1 - i] = bit(i)
+    grid[7][8] = bit(6)
+    grid[8][8] = bit(7)
+    grid[8][7] = bit(8)
+    for i in range(9, 15):
+        grid[8][14 - i] = bit(i)
+    for i in range(8, 15):
+        grid[n - 15 + i][8] = bit(i)
+    grid[n - 8][8] = True  # always-dark module
+
+
+def _run_penalty(line):
+    score, run = 0, 1
+    for i in range(1, len(line)):
+        if line[i] == line[i - 1]:
+            run += 1
+        else:
+            if run >= 5:
+                score += run - 2  # 3 + (run - 5)
+            run = 1
+    if run >= 5:
+        score += run - 2
+    return score
+
+
+_FINDER_LIKE = ([0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1],
+                [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0])
+
+
+def _penalty(grid, n):
+    score = 0
+    cols_ = [list(col) for col in zip(*grid)]
+    for line in grid + cols_:
+        score += _run_penalty(line)
+        ints = [int(v) for v in line]
+        for i in range(len(line) - 10):
+            window = ints[i:i + 11]
+            if window in _FINDER_LIKE:
+                score += 40
+    for r in range(n - 1):
+        for c in range(n - 1):
+            if grid[r][c] == grid[r][c + 1] == grid[r + 1][c] == grid[r + 1][c + 1]:
+                score += 3
+    dark = sum(sum(1 for v in row if v) for row in grid)
+    pct = dark * 100.0 / (n * n)
+    score += int(abs(pct - 50) // 5) * 10
+    return score
+
+
+def qr_matrix(text: str):
+    """Encode text into a QR code; returns rows of bools (True = dark)."""
+    version, codewords = _qr_codewords(text.encode("utf-8"))
+    grid, reserved = _qr_function_patterns(version)
+    _place_data(grid, reserved, codewords)
+
+    best, best_score = None, None
+    for mask in range(8):
+        trial = [row[:] for row in grid]
+        n = len(trial)
+        for r in range(n):
+            for c in range(n):
+                if not reserved[r][c] and _mask_bit(mask, r, c):
+                    trial[r][c] = not trial[r][c]
+        _draw_format(trial, mask)
+        score = _penalty(trial, n)
+        if best is None or score < best_score:
+            best, best_score = trial, score
+    return best
+
+
+def qr_terminal(matrix, quiet=4):
+    """ANSI half-block rendering; dark modules on a white background."""
+    n = len(matrix)
+    w = n + 2 * quiet
+
+    def dark(r, c):
+        return 0 <= r - quiet < n and 0 <= c - quiet < n and matrix[r - quiet][c - quiet]
+
+    lines = []
+    for r in range(0, w, 2):
+        chunks = []
+        for c in range(w):
+            top, bottom = dark(r, c), dark(r + 1, c)
+            chunks.append("█" if top and bottom else "▀" if top
+                          else "▄" if bottom else " ")
+        lines.append("\x1b[30;107m" + "".join(chunks) + "\x1b[0m")
+    return "\n".join(lines)
+
 
 PAGE = """<!doctype html>
 <html lang="en"><head>
@@ -82,8 +392,9 @@ function upload(files) {
     li.firstElementChild.textContent = f.name;
     list.prepend(li);
     const fd = new FormData();
+    // relative path resolves under the (possibly secret) page URL
     fd.append('file', f);
-    fetch('/upload', { method: 'POST', body: fd })
+    fetch('upload', { method: 'POST', body: fd })
       .then(r => { li.lastElementChild.textContent = r.ok ? 'OK' : 'FAIL';
                    li.lastElementChild.className = r.ok ? 'ok' : 'err'; })
       .catch(() => { li.lastElementChild.textContent = 'ERR';
@@ -96,6 +407,7 @@ function upload(files) {
 </body></html>
 """
 
+
 def safe_name(name: str) -> str:
     # Decode, reduce to a bare filename: kills ../, ..\\, absolute paths
     name = unquote(name).replace("\\", "/")
@@ -106,7 +418,7 @@ def safe_name(name: str) -> str:
     name = name.lstrip(".") or ""
     # Only keep characters known safe; everything else becomes "_"
     name = re.sub(r"[^A-Za-z0-9._ ()\[\]-]", "_", name)
-    if not name or name.strip("."):
+    if not name or not name.strip("."):
         name = "file_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     # Defense in depth: final resolved path MUST stay inside UPLOAD_DIR
     path = os.path.realpath(os.path.join(UPLOAD_DIR, name))
@@ -122,7 +434,14 @@ def safe_name(name: str) -> str:
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path in ("/", "/index.html"):
+        if SECRET_TOKEN and self.path == "/" + SECRET_TOKEN:
+            # redirect to add the trailing slash so relative URLs resolve
+            self.send_response(302)
+            self.send_header("Location", PAGE_PATH)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.path == PAGE_PATH or (not SECRET_TOKEN and self.path == "/index.html"):
             body = PAGE.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -133,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        if self.path != "/upload":
+        if self.path != UPLOAD_PATH:
             self.send_error(404)
             return
 
@@ -190,13 +509,19 @@ def lan_ip() -> str:
 
 def main():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
+    url = f"http://{lan_ip()}:{PORT}{PAGE_PATH}"
+    print(f"Uploads directory: {UPLOAD_DIR}", flush=True)
+    print(f"Open {url}  (Ctrl+C to stop)", flush=True)
+    try:
+        print(qr_terminal(qr_matrix(url)), flush=True)
+    except ValueError as exc:
+        print(f"(no QR code: {exc})", flush=True)
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"Uploads directory: {UPLOAD_DIR}")
-    print(f"Serving on http://{lan_ip()}:{PORT}  (Ctrl+C to stop)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
+
 
 if __name__ == "__main__":
     main()
