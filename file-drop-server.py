@@ -12,9 +12,11 @@ code encodes that full path, and requests to any other path get a 404.
 """
 
 import argparse
+import json
 import os
 import re
 import secrets
+import shutil
 import sys
 import socket
 from datetime import datetime
@@ -44,6 +46,8 @@ UPLOAD_DIR = os.path.abspath(ARGS.dir)
 SECRET_TOKEN = secrets.token_urlsafe(16) if ARGS.secret else None
 PAGE_PATH = f"/{SECRET_TOKEN}/" if SECRET_TOKEN else "/"
 UPLOAD_PATH = f"/{SECRET_TOKEN}/upload" if SECRET_TOKEN else "/upload"
+FILES_PATH = f"{PAGE_PATH}files"          # JSON listing of the uploads dir
+FILE_DOWNLOAD_PREFIX = f"{PAGE_PATH}fl/"  # download one file by name
 
 
 # --- Minimal QR code encoder (byte mode, EC level M, versions 1-6) ----------
@@ -354,6 +358,14 @@ PAGE = """<!doctype html>
   #bar { width:min(90vw,500px); height:6px; background:#333; border-radius:3px;
          margin-top:1rem; display:none; }
   #bar > div { height:100%; width:0; background:#4caf50; border-radius:3px; }
+  h2 { font-size:1rem; margin:1.2rem 0 .4rem; color:#ccc; }
+  #saved { margin:0; padding:0; list-style:none; width:min(90vw,500px); }
+  #saved li { display:flex; justify-content:space-between; gap:1rem;
+              padding:.4rem .6rem; border-radius:6px; background:#222;
+              margin-bottom:.4rem; font-size:.9rem; overflow-wrap:anywhere; }
+  #saved a { color:#7ec2ff; text-decoration:none; }
+  #saved .size { color:#888; white-space:nowrap; }
+  #saved .empty { color:#888; justify-content:center; }
   p.hint { color:#888; font-size:.85rem; }
 </style>
 </head><body>
@@ -363,12 +375,16 @@ PAGE = """<!doctype html>
 <input type="file" id="files" multiple>
 <ul id="list"></ul>
 <div id="bar"><div></div></div>
+<h2>Saved files</h2>
+<p class="hint">tap a file to download it</p>
+<ul id="saved"></ul>
 <script>
 const drop = document.getElementById('drop');
 const input = document.getElementById('files');
 const list = document.getElementById('list');
 const bar = document.getElementById('bar');
 const fill = bar.firstElementChild;
+const saved = document.getElementById('saved');
 
 drop.onclick = () => input.click();
 drop.ondragover = e => { e.preventDefault(); drop.classList.add('hover'); };
@@ -385,7 +401,7 @@ function upload(files) {
   bar.style.display = 'block';
   let done = 0;
   const next = () => {
-    if (done >= files.length) { bar.style.display = 'none'; return; }
+    if (done >= files.length) { bar.style.display = 'none'; refresh(); return; }
     const f = files[done++];
     const li = document.createElement('li');
     li.innerHTML = `<span></span><span class="ok">&#8230;</span>`;
@@ -403,6 +419,44 @@ function upload(files) {
   };
   next();
 }
+
+function fmtSize(n) {
+  if (n < 1024) return n + ' B';
+  const u = ['KB', 'MB', 'GB'];
+  let i = -1;
+  do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+  return n.toFixed(n >= 100 ? 0 : 1) + ' ' + u[i];
+}
+
+function refresh() {
+  fetch('files')
+    .then(r => r.ok ? r.json() : [])
+    .then(items => {
+      saved.textContent = '';
+      if (!items.length) {
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = 'nothing here yet';
+        saved.appendChild(li);
+        return;
+      }
+      for (const it of items) {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = 'fl/' + encodeURIComponent(it.name);
+        a.download = it.name;   // force download, not navigation
+        a.textContent = it.name;
+        const size = document.createElement('span');
+        size.className = 'size';
+        size.textContent = fmtSize(it.size);
+        li.appendChild(a);
+        li.appendChild(size);
+        saved.appendChild(li);
+      }
+    })
+    .catch(() => {});
+}
+refresh();
 </script>
 </body></html>
 """
@@ -432,24 +486,90 @@ def safe_name(name: str) -> str:
     return os.path.basename(path)
 
 
+def _inside_uploads(path: str) -> bool:
+    real = os.path.realpath(UPLOAD_DIR)
+    return os.path.commonpath([os.path.realpath(path), real]) == real
+
+
+def download_lookup(raw: str):
+    """Resolve a client-requested file name to a path inside UPLOAD_DIR.
+
+    Returns the absolute path, or None if the name is rejected. Reuses the
+    same whitelist as safe_name(), so only files uploads could have created
+    are reachable; hidden names and traversal fragments never match.
+    """
+    name = unquote(raw).replace("\\", "/")
+    name = os.path.basename(name)
+    name = re.sub(r"[\x00-\x1f\x7f]", "", name).strip()
+    if not name or name.startswith("."):
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9._ ()\[\]-]+", name):
+        return None
+    path = os.path.join(UPLOAD_DIR, name)
+    if not _inside_uploads(path) or not os.path.isfile(path):
+        return None
+    return path
+
+
 class Handler(BaseHTTPRequestHandler):
+    def send_page(self, body):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
-        if SECRET_TOKEN and self.path == "/" + SECRET_TOKEN:
+        base = self.path.split("?", 1)[0]
+        if SECRET_TOKEN and base == "/" + SECRET_TOKEN:
             # redirect to add the trailing slash so relative URLs resolve
             self.send_response(302)
             self.send_header("Location", PAGE_PATH)
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        if self.path == PAGE_PATH or (not SECRET_TOKEN and self.path == "/index.html"):
-            body = PAGE.encode("utf-8")
+        if base == PAGE_PATH or (not SECRET_TOKEN and base == "/index.html"):
+            self.send_page(PAGE.encode("utf-8"))
+            return
+        if base == FILES_PATH:  # listing as JSON; the page renders it
+            entries = []
+            try:
+                names = os.listdir(UPLOAD_DIR)
+            except OSError:
+                names = []
+            for name in names:
+                path = os.path.join(UPLOAD_DIR, name)
+                try:
+                    if not _inside_uploads(path) or not os.path.isfile(path):
+                        continue
+                    entries.append((os.path.getmtime(path), name,
+                                    os.path.getsize(path)))
+                except OSError:
+                    continue
+            entries.sort(reverse=True)
+            body = json.dumps([{"name": n, "size": s} for _, n, s in entries])
             self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
-        else:
-            self.send_error(404)
+            self.wfile.write(body.encode("utf-8"))
+            return
+        if base.startswith(FILE_DOWNLOAD_PREFIX):
+            path = download_lookup(base[len(FILE_DOWNLOAD_PREFIX):])
+            if path is None:
+                self.send_error(404)
+                return
+            size = os.path.getsize(path)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition", 'attachment; filename="%s"'
+                             % os.path.basename(path))
+            self.send_header("Content-Length", str(size))
+            self.end_headers()
+            with open(path, "rb") as fh:
+                shutil.copyfileobj(fh, self.wfile)
+            return
+        self.send_error(404)
 
     def do_POST(self):
         if self.path != UPLOAD_PATH:

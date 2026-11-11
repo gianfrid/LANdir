@@ -16,6 +16,7 @@ Covers:
 
 import http.client
 import importlib.util
+import json
 import os
 import re
 import socket
@@ -357,6 +358,21 @@ class SafeNameTests(unittest.TestCase):
         self.assertNotEqual(name, "exists.txt")  # won't overwrite the original
         self.assertTrue(os.path.exists(orig))
 
+    def test_download_lookup(self):
+        good = os.path.join(self.tmp.name, "good file (1) [x].txt")
+        open(good, "w").close()
+        sub = os.path.join(self.tmp.name, "sub")
+        os.mkdir(sub)
+        # resolves an uploaded-style name to its path
+        found = self.fds.download_lookup("good%20file%20(1)%20%5Bx%5D.txt")
+        self.assertEqual(os.path.basename(found), "good file (1) [x].txt")
+        # directories, hidden, traversal and unknown names are rejected
+        for raw in ("sub", "sub/", ".bashrc", "..", "../../etc/passwd",
+                    "%2e%2e/etc/passwd", "nope.txt", "", "a/b.txt",
+                    "na\x00me.txt"):
+            with self.subTest(raw=raw):
+                self.assertIsNone(self.fds.download_lookup(raw))
+
 
 class ServerTestBase(unittest.TestCase):
     """Boots the real server on 127.0.0.1 with an ephemeral port."""
@@ -418,9 +434,55 @@ class PlainServerTests(ServerTestBase):
                 page = resp.read().decode()
                 self.assertIn("Drop files here", page)
                 self.assertIn("fetch('upload'", page)  # relative upload path
+                self.assertIn("Saved files", page)
+                self.assertIn("fetch('files'", page)   # relative listing path
+                self.assertIn("fl/", page)             # relative download path
 
     def test_get_unknown_404(self):
         self.assertEqual(self.get("/nonsense").status, 404)
+        self.assertEqual(self.get("/files/").status, 404)
+
+    def test_files_listing_json(self):
+        self.upload_ok("/upload", "zz.txt", b"z" * 10)
+        self.upload_ok("/upload", "aa.txt", b"a" * 3)
+        resp = self.get("/files")
+        self.assertEqual(resp.status, 200)
+        self.assertIn("application/json", resp.getheader("Content-Type"))
+        items = json.loads(resp.read())
+        names = [it["name"] for it in items]
+        self.assertIn("aa.txt", names)
+        self.assertIn("zz.txt", names)
+        sizes = {it["name"]: it["size"] for it in items}
+        self.assertEqual(sizes["aa.txt"], 3)
+        self.assertEqual(sizes["zz.txt"], 10)
+
+    def test_download_file(self):
+        self.upload_ok("/upload", "dl.bin", b"\x00\x01payload")
+        resp = self.get("/fl/dl.bin")
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.read(), b"\x00\x01payload")
+        self.assertEqual(resp.getheader("Content-Type"),
+                         "application/octet-stream")
+        self.assertIn('attachment; filename="dl.bin"',
+                      resp.getheader("Content-Disposition"))
+        self.assertEqual(int(resp.getheader("Content-Length")), 9)
+
+    def test_download_traversal_rejected(self):
+        self.upload_ok("/upload", "guard.bin", b"contained")
+        for frag in ("..%2ffile-drop-server.py", "sub/../../file-drop-server.py",
+                    "%2e%2e%2ffile-drop-server.py",
+                    "..%2f..%2fetc%2fpasswd",
+                    "fl%2f..%2ffile-drop-server.py"):
+            with self.subTest(frag=frag):
+                resp = self.get("/fl/" + frag)
+                self.assertEqual(resp.status, 404)
+        # a name that exists only outside the uploads dir never resolves
+        self.assertEqual(self.get("/fl/file-drop-server.py").status, 404)
+
+    def test_download_hidden_or_unknown_404(self):
+        for name in (".bashrc", "nope.txt", "sub/zz.txt"):
+            with self.subTest(name=name):
+                self.assertEqual(self.get("/fl/" + name).status, 404)
 
     def test_upload_saves_content(self):
         self.upload_ok("/upload", "hello.txt", b"hello world")
@@ -494,6 +556,21 @@ class SecretServerTests(ServerTestBase):
         # a prefix of the token is not the token
         partial = self.fds.SECRET_TOKEN[:-1]
         self.assertEqual(self.get(f"/{partial}/").status, 404)
+
+    def test_listing_and_download_under_token(self):
+        tok = "/" + self.fds.SECRET_TOKEN
+        self.upload_ok(tok + "/upload", "s.txt", b"secret bytes")
+        self.assertEqual(self.get("/files").status, 404)  # hidden at root
+        self.assertEqual(self.get("/fl/s.txt").status, 404)
+        resp = self.get(tok + "/files")
+        self.assertEqual(resp.status, 200)
+        self.assertIn("s.txt", [it["name"] for it in json.loads(resp.read())])
+        dl = self.get(tok + "/fl/s.txt")
+        self.assertEqual(dl.status, 200)
+        self.assertEqual(dl.read(), b"secret bytes")
+        other = "y" * 22
+        self.assertEqual(self.get(f"/{other}/files").status, 404)
+        self.assertEqual(self.get(f"/{other}/fl/s.txt").status, 404)
 
 
 class StartupSmokeTest(unittest.TestCase):

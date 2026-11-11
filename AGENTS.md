@@ -27,8 +27,9 @@ Python 3.7+ standard library only. No packaging, no install step, no config file
 ## Architecture
 
 - `http.server.ThreadingHTTPServer` with a single `BaseHTTPRequestHandler` subclass.
-- `GET /` serves a fixed HTML string (`PAGE`) with a drag-and-drop / file-picker UI. With `--secret`, `GET /<token>/` serves the same page (bare `/<token>` gets a 302 to add the trailing slash) and everything else 404s.
+- `GET /` serves a fixed HTML string (`PAGE`) with a drag-and-drop / file-picker UI and client-side rendering of the downloads list. With `--secret`, `GET /<token>/` serves the same page (bare `/<token>` gets a 302 to add the trailing slash) and everything else 404s.
 - `POST /upload` parses `multipart/form-data` manually (boundary split, `Content-Disposition` filename extraction) and writes each file to the uploads directory. With `--secret` only `POST /<token>/upload` is accepted. The page's JS posts to a relative `upload` path, so it resolves correctly under either mode.
+- `GET /files` returns a JSON listing of the uploads directory (newest first); `GET /fl/<name>` streams one file as an attachment. Both move under `/<token>/` with `--secret`. Download names go through `download_lookup()` (basename + character whitelist + realpath containment), a mirror of `safe_name()`.
 - The QR encoder (`qr_matrix` / `qr_terminal` and helpers) is pure stdlib: byte mode, EC level M, versions 1-6, Reed-Solomon over GF(256), 8 standard masks with penalty selection, ANSI half-block rendering. Do not add a QR dependency.
 - CLI args only (argparse). No env vars, no config files.
 
@@ -36,7 +37,7 @@ Python 3.7+ standard library only. No packaging, no install step, no config file
 
 The server accepts untrusted uploads on the network. Any change must preserve:
 
-1. Path traversal protection: every filename goes through `safe_name()` — URL-decode, backslash normalization, `os.path.basename`, control-char strip, leading-dot strip, character whitelist, then a `realpath`/`commonpath` containment check against the uploads directory. Never write a file using a client-controlled path component without this function.
+1. Path traversal protection: every uploaded filename goes through `safe_name()` — URL-decode, backslash normalization, `os.path.basename`, control-char strip, leading-dot strip, character whitelist, then a `realpath`/`commonpath` containment check against the uploads directory. Never write a file using a client-controlled path component without this function. Every client-requested download name goes through `download_lookup()`, which applies the same whitelist and containment and only resolves regular files inside the uploads directory.
 2. No code execution surface: no `eval`, `exec`, `os.system`, `subprocess`, shell string interpolation, or templating of uploaded content anywhere in the codebase. Uploaded bytes are only ever written to disk.
 3. The served HTML is a static constant. Do not reflect request data into it.
 4. Names that resolve to existing files get a timestamp suffix instead of overwriting.
@@ -54,8 +55,9 @@ python3 -m unittest discover -s tests
 
 The suite covers the QR encoder (a spec-based decoder reads the matrix
 back: format-info BCH check, RS syndromes via independent GF(256) math,
-byte-mode round trip), `safe_name`, and the HTTP endpoints in both plain
-and `--secret` modes.
+byte-mode round trip), `safe_name` and `download_lookup`, and the HTTP
+endpoints (upload, JSON listing, downloads, traversal rejection) in
+both plain and `--secret` modes.
 
 Additional manual verification (also exercises real end devices):
 
