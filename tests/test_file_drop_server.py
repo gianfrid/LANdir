@@ -510,6 +510,23 @@ class PlainServerTests(ServerTestBase):
                             {"Content-Type": "text/plain"})
         self.assertEqual(resp.status, 400)
 
+    def test_bad_content_length_400(self):
+        # negative or non-numeric Content-Length must 400, not crash
+        for value in ("-5", "twelve"):
+            with self.subTest(cl=value):
+                resp = self.request(
+                    "POST", "/upload", b"",
+                    {"Content-Type": "multipart/form-data; boundary=B",
+                     "Content-Length": value})
+                self.assertEqual(resp.status, 400)
+
+    def test_content_length_missing_400(self):
+        # chunked-style posts without Content-Length get no data -> 400
+        resp = self.request(
+            "POST", "/upload", b"",
+            {"Content-Type": "multipart/form-data; boundary=B"})
+        self.assertEqual(resp.status, 400)
+
 
 class SecretServerTests(ServerTestBase):
     secret = ("--secret",)

@@ -584,7 +584,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         boundary = m.group(1).encode()
 
-        length = int(self.headers.get("Content-Length", 0))
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            length = -1
+        if length < 0:  # negative or non-numeric: reject, don't crash
+            self.send_error(400, "Bad request")
+            return
         data = self.rfile.read(length)
 
         # Split parts
