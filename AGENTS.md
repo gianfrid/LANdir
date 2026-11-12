@@ -18,7 +18,8 @@ python3 file-drop-server.py [--port PORT] [--dir UPLOADS_DIR] [--secret]
 ```
 
 At startup the server prints the URL to open, rendered as a scannable QR
-code (ANSI half-blocks). With `--secret` the page and upload endpoint move
+code (ANSI half-blocks). If the requested port is occupied, the server
+automatically falls back to a random available high port (32768-60999). With `--secret` the page and upload endpoint move
 under a fresh random token path (`/<token>/`, `/<token>/upload`) and every
 other path returns 404; the QR code encodes the full secret URL.
 

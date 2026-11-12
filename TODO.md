@@ -1,0 +1,2 @@
+- [x] use random (high) port if default one is already occupied
+- create ContainerFile and test using podman (with docker compatibility). choose a base image taking consideration of performance, size and availability
