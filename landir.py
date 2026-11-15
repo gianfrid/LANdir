@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""File Drop Server - a simple LAN file upload server.
+"""Landir - a simple LAN file upload server.
 
 Usage:
-    python3 file-drop-server.py [--port PORT] [--dir UPLOADS_DIR] [--secret]
+    python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--secret]
 
 Defaults: port 8000, uploads in ./uploads next to the script.
 At startup the server prints the address to open from any device on the
@@ -79,6 +79,7 @@ PAGE_PATH = f"/{SECRET_TOKEN}/" if SECRET_TOKEN else "/"
 UPLOAD_PATH = f"/{SECRET_TOKEN}/upload" if SECRET_TOKEN else "/upload"
 FILES_PATH = f"{PAGE_PATH}files"          # JSON listing of the uploads dir
 FILE_DOWNLOAD_PREFIX = f"{PAGE_PATH}fl/"  # download one file by name
+FILES_LIST_PREFIX = f"{PAGE_PATH}ls/"   # list directory contents (optional path)
 
 
 # --- Minimal QR code encoder (byte mode, EC level M, versions 1-6) ----------
@@ -370,7 +371,7 @@ PAGE = """<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>File Drop</title>
+<title>Landir</title>
 <style>
   :root { color-scheme: dark; }
   body { font-family: system-ui, sans-serif; background:#111; color:#eee;
@@ -396,18 +397,42 @@ PAGE = """<!doctype html>
               margin-bottom:.4rem; font-size:.9rem; overflow-wrap:anywhere; }
   #saved a { color:#7ec2ff; text-decoration:none; }
   #saved .size { color:#888; white-space:nowrap; }
+  #saved .date { color:#888; white-space:nowrap; font-size:.8rem; }
+  #saved .meta { display:flex; gap:1rem; align-items:center; }
   #saved .empty { color:#888; justify-content:center; }
+  #saved .dir { color:#ffcc00; cursor:pointer; }
+  #saved .dir:hover { background:#333; }
   p.hint { color:#888; font-size:.85rem; }
+  #breadcrumb { margin:0; padding:0; list-style:none; width:min(90vw,500px); 
+                display:flex; flex-wrap:wrap; gap:.5rem; font-size:.85rem; color:#888; }
+  #breadcrumb li { display:inline-flex; }
+  #breadcrumb a { color:#7ec2ff; text-decoration:none; }
+  #breadcrumb a:hover { text-decoration:underline; }
+  #toggleDates { background:#333; color:#ccc; border:1px solid #555; border-radius:4px;
+                 padding:.2rem .5rem; font-size:.8rem; cursor:pointer; margin-bottom:.5rem; }
+  #toggleDates:hover { background:#444; }
+  #sortSelect { background:#333; color:#ccc; border:1px solid #555; border-radius:4px;
+                 padding:.2rem .3rem; font-size:.8rem; cursor:pointer; margin-bottom:.5rem; }
+  .button-group { display:flex; gap:.5rem; align-items:center; }
+  body:not(.show-dates) #saved .date { display: none; }
 </style>
 </head><body>
-<h1>Drop files here</h1>
+<h1 id="page-title">Drop files here</h1>
 <p class="hint">or tap the box to pick files</p>
 <div id="drop">&#128193; Choose or drop files</div>
 <input type="file" id="files" multiple>
 <ul id="list"></ul>
 <div id="bar"><div></div></div>
+<ul id="breadcrumb"></ul>
 <h2>Saved files</h2>
-<p class="hint">tap a file to download it</p>
+<p class="hint">tap a file to download it, tap a folder to enter it</p>
+<div class="button-group">
+<button id="toggleDates" onclick="toggleDates()">Show Dates</button>
+<select id="sortSelect" onchange="setSort(this.value)">
+  <option value="newest">Sort: Newest</option>
+  <option value="name">Sort: Name</option>
+</select>
+</div>
 <ul id="saved"></ul>
 <script>
 const drop = document.getElementById('drop');
@@ -416,6 +441,25 @@ const list = document.getElementById('list');
 const bar = document.getElementById('bar');
 const fill = bar.firstElementChild;
 const saved = document.getElementById('saved');
+const breadcrumb = document.getElementById('breadcrumb');
+const pageTitle = document.getElementById('page-title');
+let sortByNewest = true;
+let refreshInterval;
+
+// Detect mobile/touch devices
+function isMobile() {
+  return window.matchMedia('(max-width: 600px)').matches || 
+         ('ontouchstart' in window) || 
+         (navigator.userAgent.match(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i));
+}
+
+// Update text for mobile devices
+if (isMobile()) {
+  pageTitle.textContent = 'Upload files here';
+  drop.textContent = '📁 Choose files';
+}
+
+let currentPath = ''; // Current directory path (relative to uploads root)
 
 drop.onclick = () => input.click();
 drop.ondragover = e => { e.preventDefault(); drop.classList.add('hover'); };
@@ -459,10 +503,87 @@ function fmtSize(n) {
   return n.toFixed(n >= 100 ? 0 : 1) + ' ' + u[i];
 }
 
+function fmtDate(timestamp) {
+  const d = new Date(timestamp * 1000);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+}
+
+function toggleDates() {
+  const body = document.body;
+  const button = document.getElementById('toggleDates');
+  
+  if (body.classList.contains('show-dates')) {
+    body.classList.remove('show-dates');
+    button.textContent = 'Show Dates';
+  } else {
+    body.classList.add('show-dates');
+    button.textContent = 'Hide Dates';
+  }
+}
+
+function setSort(mode) {
+  sortByNewest = (mode === 'newest');
+  refresh();
+}
+
+function renderBreadcrumb() {
+  breadcrumb.textContent = '';
+  const parts = currentPath.split('/').filter(p => p);
+  
+  // Always show root link
+  const rootLi = document.createElement('li');
+  const rootA = document.createElement('a');
+  rootA.href = '#';
+  rootA.textContent = 'root';
+  rootA.onclick = (e) => { e.preventDefault(); currentPath = ''; refresh(); };
+  rootLi.appendChild(rootA);
+  breadcrumb.appendChild(rootLi);
+  
+  // Show path parts
+  let pathSoFar = '';
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    pathSoFar += (pathSoFar ? '/' : '') + part;
+    
+    const li = document.createElement('li');
+    li.textContent = '/';
+    breadcrumb.appendChild(li);
+    
+    const partLi = document.createElement('li');
+    const partA = document.createElement('a');
+    partA.href = '#';
+    partA.textContent = part;
+    partA.onclick = (e) => { 
+      e.preventDefault(); 
+      currentPath = pathSoFar.substring(0, pathSoFar.indexOf('/' + part) + part.length + 1);
+      // Actually, let's rebuild it properly
+      const newParts = parts.slice(0, i + 1);
+      currentPath = newParts.join('/');
+      refresh(); 
+    };
+    partLi.appendChild(partA);
+    breadcrumb.appendChild(partLi);
+  }
+}
+
 function refresh() {
-  fetch('files')
+  renderBreadcrumb();
+  
+  let url = 'files'; // fetch('files' for root directory listing
+  if (currentPath) {
+    url = 'ls/' + encodeURIComponent(currentPath);
+  }
+  
+  fetch(url)
     .then(r => r.ok ? r.json() : [])
     .then(items => {
+      // Sort items based on current sort mode
+      if (sortByNewest) {
+        items.sort((a, b) => b.mtime - a.mtime);
+      } else {
+        items.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      
       saved.textContent = '';
       if (!items.length) {
         const li = document.createElement('li');
@@ -473,20 +594,52 @@ function refresh() {
       }
       for (const it of items) {
         const li = document.createElement('li');
-        const a = document.createElement('a');
-        a.href = 'fl/' + encodeURIComponent(it.name);
-        a.download = it.name;   // force download, not navigation
-        a.textContent = it.name;
-        const size = document.createElement('span');
-        size.className = 'size';
-        size.textContent = fmtSize(it.size);
-        li.appendChild(a);
-        li.appendChild(size);
-        saved.appendChild(li);
+        
+        if (it.is_dir) {
+          const span = document.createElement('span');
+          span.className = 'dir';
+          span.textContent = it.name + '/';
+          span.onclick = () => {
+            currentPath = currentPath ? currentPath + '/' + it.name : it.name;
+            refresh();
+          };
+          li.appendChild(span);
+          const meta = document.createElement('span');
+          meta.className = 'meta';
+          const date = document.createElement('span');
+          date.className = 'date';
+          date.textContent = fmtDate(it.mtime);
+          meta.appendChild(date);
+          li.appendChild(meta);
+          saved.appendChild(li);
+        } else {
+          const a = document.createElement('a');
+          const filePath = currentPath ? currentPath + '/' + it.name : it.name;
+          a.href = 'fl/' + encodeURIComponent(filePath);
+          a.download = it.name;   // force download, not navigation
+          a.textContent = it.name;
+          li.appendChild(a);
+          const meta = document.createElement('span');
+          meta.className = 'meta';
+          const size = document.createElement('span');
+          size.className = 'size';
+          size.textContent = fmtSize(it.size);
+          const date = document.createElement('span');
+          date.className = 'date';
+          date.textContent = fmtDate(it.mtime);
+          meta.appendChild(size);
+          meta.appendChild(date);
+          li.appendChild(meta);
+          saved.appendChild(li);
+        }
       }
     })
     .catch(() => {});
 }
+
+// Auto-refresh every 5 seconds
+refreshInterval = setInterval(refresh, 5000);
+// Initial refresh
 refresh();
 </script>
 </body></html>
@@ -522,23 +675,57 @@ def _inside_uploads(path: str) -> bool:
     return os.path.commonpath([os.path.realpath(path), real]) == real
 
 
+def _safe_path_component(name: str) -> str:
+    """Sanitize a single path component (filename or directory name).
+    
+    Returns sanitized name or empty string if invalid.
+    """
+    name = unquote(name).replace("\\", "/")
+    name = os.path.basename(name)
+    name = re.sub(r"[\x00-\x1f\x7f]", "", name).strip()
+    if not name or name.startswith("."):
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9._ ()\[\]-]+", name):
+        return ""
+    return name
+
+
 def download_lookup(raw: str):
     """Resolve a client-requested file name to a path inside UPLOAD_DIR.
 
     Returns the absolute path, or None if the name is rejected. Reuses the
     same whitelist as safe_name(), so only files uploads could have created
     are reachable; hidden names and traversal fragments never match.
+    
+    Supports paths with directories (e.g., 'folder/file.txt').
     """
-    name = unquote(raw).replace("\\", "/")
-    name = os.path.basename(name)
-    name = re.sub(r"[\x00-\x1f\x7f]", "", name).strip()
-    if not name or name.startswith("."):
+    # Unquote first to handle URL-encoded slashes (%2F)
+    raw = unquote(raw)
+    # Split the path into components
+    path_parts = raw.split("/")
+    
+    # Sanitize each component
+    sanitized_parts = []
+    for part in path_parts:
+        sanitized = _safe_path_component(part)
+        if not sanitized:
+            return None
+        sanitized_parts.append(sanitized)
+    
+    if not sanitized_parts:
         return None
-    if not re.fullmatch(r"[A-Za-z0-9._ ()\[\]-]+", name):
+    
+    # Build the full path
+    path = os.path.join(UPLOAD_DIR, *sanitized_parts)
+    
+    # Security check: must be inside UPLOAD_DIR
+    if not _inside_uploads(path):
         return None
-    path = os.path.join(UPLOAD_DIR, name)
-    if not _inside_uploads(path) or not os.path.isfile(path):
+    
+    # Must be a file (not a directory)
+    if not os.path.isfile(path):
         return None
+    
     return path
 
 
@@ -571,14 +758,75 @@ class Handler(BaseHTTPRequestHandler):
             for name in names:
                 path = os.path.join(UPLOAD_DIR, name)
                 try:
-                    if not _inside_uploads(path) or not os.path.isfile(path):
+                    if not _inside_uploads(path):
                         continue
-                    entries.append((os.path.getmtime(path), name,
-                                    os.path.getsize(path)))
+                    if os.path.isdir(path):
+                        entries.append((os.path.getmtime(path), name, 0, True))
+                    elif os.path.isfile(path):
+                        entries.append((os.path.getmtime(path), name,
+                                        os.path.getsize(path), False))
                 except OSError:
                     continue
             entries.sort(reverse=True)
-            body = json.dumps([{"name": n, "size": s} for _, n, s in entries])
+            body = json.dumps([{"name": n, "size": s, "is_dir": is_dir, 
+                               "mtime": mtime} 
+                              for mtime, n, s, is_dir in entries])
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body.encode("utf-8"))
+            return
+        
+        if base.startswith(FILES_LIST_PREFIX):
+            # List contents of a specific directory
+            rel_path = base[len(FILES_LIST_PREFIX):]
+            # Unquote first to handle URL-encoded slashes (%2F)
+            rel_path = unquote(rel_path)
+            # Sanitize and resolve the directory path
+            path_parts = rel_path.split("/")
+            sanitized_parts = []
+            for part in path_parts:
+                sanitized = _safe_path_component(part)
+                if not sanitized:
+                    self.send_error(404)
+                    return
+                sanitized_parts.append(sanitized)
+            
+            if not sanitized_parts:
+                # List root upload directory
+                dir_path = UPLOAD_DIR
+            else:
+                dir_path = os.path.join(UPLOAD_DIR, *sanitized_parts)
+            
+            # Security check
+            if not _inside_uploads(dir_path) or not os.path.isdir(dir_path):
+                self.send_error(404)
+                return
+            
+            entries = []
+            try:
+                names = os.listdir(dir_path)
+            except OSError:
+                names = []
+            
+            for name in names:
+                path = os.path.join(dir_path, name)
+                try:
+                    if not _inside_uploads(path):
+                        continue
+                    if os.path.isdir(path):
+                        entries.append((os.path.getmtime(path), name, 0, True))
+                    elif os.path.isfile(path):
+                        entries.append((os.path.getmtime(path), name,
+                                        os.path.getsize(path), False))
+                except OSError:
+                    continue
+            
+            entries.sort(reverse=True)
+            body = json.dumps([{"name": n, "size": s, "is_dir": is_dir, 
+                               "mtime": mtime} 
+                              for mtime, n, s, is_dir in entries])
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
