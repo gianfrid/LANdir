@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python tests
+        run: python3 -m unittest discover -s tests
+
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Rust tests
+        run: cargo test --locked
+
+      - name: cargo audit (RustSec advisories)
+        run: |
+          cargo install cargo-audit --locked --quiet
+          cargo audit
+
+      - name: SBOM is up to date
+        # cargo-sbom output ordering is non-deterministic; compare normalized package sets
+        run: |
+          cargo install cargo-sbom --locked --quiet
+          norm() { jq -S '[.packages[] | {name, versionInfo, licenseConcluded}] | sort_by(.name)'; }
+          cargo sbom 2>/dev/null | norm > /tmp/sbom-new.json
+          norm < SBOM.spdx.json > /tmp/sbom-old.json
+          diff /tmp/sbom-old.json /tmp/sbom-new.json
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build container image
+        run: podman build -f Containerfile -t landir .
+      - name: Smoke test
+        run: |
+          mkdir -p /tmp/smoke-uploads
+          podman run -d --name landir-smoke -p 18080:8000 -v /tmp/smoke-uploads:/app/uploads landir
+          sleep 2
+          podman logs landir-smoke | grep -q "Open http://"
+          podman kill -s INT landir-smoke
+          sleep 1
+          podman ps -a --filter name=landir-smoke --format '{{.Status}}' | grep -q "Exited (0)"

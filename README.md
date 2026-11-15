@@ -66,8 +66,17 @@ cargo build --release --target x86_64-unknown-linux-musl
 - `cargo audit` — vulnerability scan of `Cargo.lock` against the RustSec
   advisory database (requires `cargo install cargo-audit`); currently clean
 - The container base is `gcr.io/distroless/static-debian13` pinned by
-  **digest** (multi-arch index) in the `Containerfile`; refresh it with
-  `./scripts/update-distroless-digest.sh`
+  **digest** (multi-arch index) in the `Containerfile`; on GitHub, Dependabot
+  keeps tag+digest and Cargo deps updated automatically (`.github/dependabot.yml`).
+  Offline fallback: `./scripts/update-distroless-digest.sh`
+
+## CI / automation (GitHub, free for public repos)
+
+- `.github/workflows/ci.yml` — on every push/PR: Python unittest suite, `cargo test
+  --locked`, `cargo audit`, SBOM freshness check (normalized diff), and a
+  container build + smoke test with podman
+- `.github/dependabot.yml` — weekly updates for the `docker` (Containerfile
+  FROM lines, tag+digest) and `cargo` (Cargo.lock) ecosystems
 
 ## See Also
 

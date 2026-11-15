@@ -16,7 +16,7 @@ CONTAINERFILE="${1:-Containerfile}"
 
 cd "$(dirname "$0")/.."
 
-old=$(grep -oE "${IMAGE}@sha256:[a-f0-9]+" "$CONTAINERFILE" | head -1 || true)
+old=$(grep -oE "${IMAGE}(:${TAG})?@sha256:[a-f0-9]+" "$CONTAINERFILE" | head -1 || true)
 
 # Pull the tag and read back the repository (index) digest podman recorded.
 podman pull --quiet "${IMAGE}:${TAG}" >/dev/null
@@ -27,13 +27,13 @@ if ! [[ "$new" =~ ^sha256:[a-f0-9]{64}$ ]]; then
     exit 1
 fi
 
-ref="${IMAGE}@${new}"
+ref="${IMAGE}:${TAG}@${new}"
 if [[ "$old" == "$ref" ]]; then
     echo "up to date: ${ref}"
     exit 0
 fi
 
-sed -i "s|${IMAGE}@sha256:[a-f0-9]*|${ref}|" "$CONTAINERFILE"
+sed -i -E "s|${IMAGE}(:${TAG})?@sha256:[a-f0-9]+|${ref}|" "$CONTAINERFILE"
 echo "updated ${CONTAINERFILE}:"
 echo "  old: ${old:-<none>}"
 echo "  new: ${ref}"
