@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test suite for file-drop-server.py. Stdlib unittest only, no dependencies.
+"""Test suite for landir.py. Stdlib unittest only, no dependencies.
 
 Run from the repo root:
     python3 -m unittest discover -s tests -v
@@ -29,14 +29,14 @@ import unittest
 from http.server import ThreadingHTTPServer
 
 SERVER = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                      "..", "file-drop-server.py")
+                      "..", "landir.py")
 
 
 def load_server(argv_extra=()):
     """Load a fresh module instance (it parses sys.argv at import time)."""
     name = "fds_" + ("secret" if "--secret" in argv_extra else "plain")
     old_argv = sys.argv
-    sys.argv = ["file-drop-server.py", *argv_extra]
+    sys.argv = ["landir.py", *argv_extra]
     try:
         spec = importlib.util.spec_from_file_location(name, SERVER)
         mod = importlib.util.module_from_spec(spec)
@@ -252,8 +252,8 @@ class QRTests(unittest.TestCase):
             self.fds.qr_matrix("Z" * 107)
 
     def test_matrices_are_deterministic(self):
-        m1 = self.fds.qr_matrix("http://10.0.0.9:8000/")
-        m2 = self.fds.qr_matrix("http://10.0.0.9:8000/")
+        m1 = self.fds.qr_matrix("http://10.0.0.1:8000/")
+        m2 = self.fds.qr_matrix("http://10.0.0.1:8000/")
         self.assertEqual(m1, m2)
 
     def test_pad_codewords_alternate_from_ec(self):
@@ -469,15 +469,15 @@ class PlainServerTests(ServerTestBase):
 
     def test_download_traversal_rejected(self):
         self.upload_ok("/upload", "guard.bin", b"contained")
-        for frag in ("..%2ffile-drop-server.py", "sub/../../file-drop-server.py",
-                    "%2e%2e%2ffile-drop-server.py",
+        for frag in ("..%2flandir.py", "sub/../../landir.py",
+                    "%2e%2e%2flandir.py",
                     "..%2f..%2fetc%2fpasswd",
-                    "fl%2f..%2ffile-drop-server.py"):
+                    "fl%2f..%2flandir.py"):
             with self.subTest(frag=frag):
                 resp = self.get("/fl/" + frag)
                 self.assertEqual(resp.status, 404)
         # a name that exists only outside the uploads dir never resolves
-        self.assertEqual(self.get("/fl/file-drop-server.py").status, 404)
+        self.assertEqual(self.get("/fl/landir.py").status, 404)
 
     def test_download_hidden_or_unknown_404(self):
         for name in (".bashrc", "nope.txt", "sub/zz.txt"):
@@ -526,6 +526,95 @@ class PlainServerTests(ServerTestBase):
             "POST", "/upload", b"",
             {"Content-Type": "multipart/form-data; boundary=B"})
         self.assertEqual(resp.status, 400)
+
+    def test_directory_listing_includes_folders(self):
+        # Create a directory structure
+        folder_path = os.path.join(self.upload_dir.name, "testfolder")
+        os.makedirs(folder_path)
+        with open(os.path.join(folder_path, "inner.txt"), "wb") as f:
+            f.write(b"inner content")
+        with open(os.path.join(self.upload_dir.name, "root.txt"), "wb") as f:
+            f.write(b"root content")
+        
+        # List root directory - should include both files and directories
+        resp = self.get("/files")
+        self.assertEqual(resp.status, 200)
+        items = json.loads(resp.read())
+        names = [it["name"] for it in items]
+        self.assertIn("root.txt", names)
+        self.assertIn("testfolder", names)
+        
+        # Check that directories have is_dir=True
+        dir_item = next(it for it in items if it["name"] == "testfolder")
+        self.assertTrue(dir_item["is_dir"])
+        self.assertEqual(dir_item["size"], 0)
+        
+        # Check that files have is_dir=False
+        file_item = next(it for it in items if it["name"] == "root.txt")
+        self.assertFalse(file_item["is_dir"])
+        self.assertEqual(file_item["size"], 12)
+
+    def test_directory_listing_with_path(self):
+        # Create a directory structure
+        folder_path = os.path.join(self.upload_dir.name, "testfolder2")
+        os.makedirs(folder_path, exist_ok=True)
+        with open(os.path.join(folder_path, "inner.txt"), "wb") as f:
+            f.write(b"inner content")
+        
+        # List the subdirectory
+        resp = self.get("/ls/testfolder2")
+        self.assertEqual(resp.status, 200)
+        items = json.loads(resp.read())
+        names = [it["name"] for it in items]
+        self.assertIn("inner.txt", names)
+        
+        # Check that the file has correct properties
+        file_item = next(it for it in items if it["name"] == "inner.txt")
+        self.assertFalse(file_item["is_dir"])
+        self.assertEqual(file_item["size"], 13)
+
+    def test_download_file_from_subdirectory(self):
+        # Create a directory structure
+        folder_path = os.path.join(self.upload_dir.name, "testfolder3")
+        os.makedirs(folder_path, exist_ok=True)
+        with open(os.path.join(folder_path, "inner.txt"), "wb") as f:
+            f.write(b"inner content")
+        
+        # Download file from subdirectory
+        resp = self.get("/fl/testfolder3/inner.txt")
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.read(), b"inner content")
+        self.assertEqual(resp.getheader("Content-Type"), "application/octet-stream")
+        self.assertIn('attachment; filename="inner.txt"',
+                      resp.getheader("Content-Disposition"))
+
+    def test_directory_traversal_rejected_in_download(self):
+        # Create a directory structure
+        folder_path = os.path.join(self.upload_dir.name, "testfolder4")
+        os.makedirs(folder_path, exist_ok=True)
+        with open(os.path.join(folder_path, "inner.txt"), "wb") as f:
+            f.write(b"inner content")
+        
+        # Try to access file with traversal
+        resp = self.get("/fl/testfolder/../root.txt")
+        self.assertEqual(resp.status, 404)
+        
+        # Try to access with absolute path
+        resp = self.get("/fl//etc/passwd")
+        self.assertEqual(resp.status, 404)
+
+    def test_directory_listing_traversal_rejected(self):
+        # Create a directory structure
+        folder_path = os.path.join(self.upload_dir.name, "testfolder5")
+        os.makedirs(folder_path, exist_ok=True)
+        
+        # Try to list with traversal
+        resp = self.get("/ls/../")
+        self.assertEqual(resp.status, 404)
+        
+        # Try to list non-existent directory
+        resp = self.get("/ls/nonexistent")
+        self.assertEqual(resp.status, 404)
 
 
 class SecretServerTests(ServerTestBase):
