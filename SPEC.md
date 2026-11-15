@@ -18,6 +18,8 @@ Automated tests — run from the repo root before delivering changes:
 ```bash
 python3 -m unittest discover -s tests   # Python implementation
 cargo test                               # Rust implementation
+cargo audit                              # RustSec advisory scan of Cargo.lock
+cargo sbom > SBOM.spdx.json              # regenerate the SPDX SBOM after dep changes
 ```
 
 Both suites cover the QR encoder, `safe_name` and `download_lookup`, and the HTTP endpoints (upload, JSON listing, downloads, traversal rejection) in both secret (default) and `--insecure` modes. The Python QR tests use a spec-based decoder (format-info BCH check, RS syndromes via independent GF(256) math, byte-mode round trip); the Rust endpoint tests drive the axum router in-process via `tower::oneshot`, no sockets needed.

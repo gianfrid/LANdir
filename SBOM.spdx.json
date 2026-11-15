@@ -1,0 +1,2649 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "creationInfo": {
+    "created": "2026-11-15T13:19:17Z",
+    "creators": [
+      "Tool: cargo-sbom-v0.10.0"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://spdx.org/spdxdocs/landir-15627e16-d145-4a98-970d-c28a153ea7cc",
+  "files": [
+    {
+      "SPDXID": "SPDXRef-File-landir",
+      "checksums": [
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "30f262c1ec3611367d14f6fca4f33beacfeef911"
+        }
+      ],
+      "fileName": "./Cargo.lock",
+      "fileTypes": [
+        "SOURCE",
+        "TEXT"
+      ]
+    }
+  ],
+  "name": "landir",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-js-sys-0.3.107",
+      "description": "Bindings for all JS global objects and functions in all JS environments like\nNode.js and browsers, built on `#[wasm_bindgen]` using the `wasm-bindgen` crate.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/js-sys@0.3.107",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "js-sys",
+      "versionInfo": "0.3.107"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-heck-0.5.0",
+      "description": "heck is a case conversion library.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/heck@0.5.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "heck",
+      "versionInfo": "0.5.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-qrcode-0.14.1",
+      "description": "QR code encoder in Rust",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/qrcode@0.14.1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "qrcode",
+      "versionInfo": "0.14.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-axum-0.8.9",
+      "description": "HTTP routing and request handling library that focuses on ergonomics and modularity",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/axum@0.8.9",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/tokio-rs/axum",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "axum",
+      "versionInfo": "0.8.9"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-moxcms-0.8.1",
+      "description": "Simple Color Management in Rust",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/moxcms@0.8.1",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/awxkee/moxcms",
+      "licenseConcluded": "BSD-3-Clause OR Apache-2.0",
+      "licenseDeclared": "BSD-3-Clause OR Apache-2.0",
+      "name": "moxcms",
+      "versionInfo": "0.8.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-is--terminal--polyfill-1.70.2",
+      "description": "Polyfill for `is_terminal` stdlib feature for use with older MSRVs",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/is_terminal_polyfill@1.70.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "is_terminal_polyfill",
+      "versionInfo": "1.70.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tokio-util-0.7.20",
+      "description": "Additional utilities for working with Tokio.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tokio-util@0.7.20",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://tokio.rs",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tokio-util",
+      "versionInfo": "0.7.20"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-futures-core-0.3.34",
+      "description": "The core traits and types in for the `futures` library.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/futures-core@0.3.34",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://rust-lang.github.io/futures-rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "futures-core",
+      "versionInfo": "0.3.34"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-futures-sink-0.3.34",
+      "description": "The asynchronous `Sink` trait for the futures-rs library.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/futures-sink@0.3.34",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://rust-lang.github.io/futures-rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "futures-sink",
+      "versionInfo": "0.3.34"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-httpdate-1.0.3",
+      "description": "HTTP date parsing and formatting",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/httpdate@1.0.3",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "httpdate",
+      "versionInfo": "1.0.3"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-image-0.25.10",
+      "description": "Imaging library. Provides basic image processing and encoders/decoders for common image formats.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/image@0.25.10",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/image-rs/image",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "image",
+      "versionInfo": "0.25.10"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-smallvec-1.16.5",
+      "description": "'Small vector' optimization: store up to a small number of items on the stack",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/smallvec@1.16.5",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "smallvec",
+      "versionInfo": "1.16.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-windows-result-0.4.1",
+      "description": "Windows error handling",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-result@0.4.1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-result",
+      "versionInfo": "0.4.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-anstream-1.0.0",
+      "description": "IO stream adapters for writing colored text that will gracefully degrade according to your terminal's capabilities.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/anstream@1.0.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "anstream",
+      "versionInfo": "1.0.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-pxfm-0.1.30",
+      "description": "Fast and accurate math",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/pxfm@0.1.30",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "BSD-3-Clause OR Apache-2.0",
+      "licenseDeclared": "BSD-3-Clause OR Apache-2.0",
+      "name": "pxfm",
+      "versionInfo": "0.1.30"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "description": "A lightweight version of pin-project written with declarative macros.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/pin-project-lite@0.2.17",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "Apache-2.0 OR MIT",
+      "licenseDeclared": "Apache-2.0 OR MIT",
+      "name": "pin-project-lite",
+      "versionInfo": "0.2.17"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-signal-hook-registry-1.4.8",
+      "description": "Backend crate for signal-hook",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/signal-hook-registry@1.4.8",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "signal-hook-registry",
+      "versionInfo": "1.4.8"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-cfg-if-1.0.5",
+      "description": "A macro to ergonomically define an item depending on a large number of #[cfg]\nparameters. Structured like an if-else chain, the first matching branch is the\nitem that gets emitted.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/cfg-if@1.0.5",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "cfg-if",
+      "versionInfo": "1.0.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-utf8parse-0.2.2",
+      "description": "Table-driven UTF-8 parser",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/utf8parse@0.2.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "Apache-2.0 OR MIT",
+      "licenseDeclared": "Apache-2.0 OR MIT",
+      "name": "utf8parse",
+      "versionInfo": "0.2.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-android--system--properties-0.1.6",
+      "description": "Minimal Android system properties wrapper",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/android_system_properties@0.1.6",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/nical/android_system_properties",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "android_system_properties",
+      "versionInfo": "0.1.6"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-http-body-util-0.1.5",
+      "description": "Combinators and adapters for HTTP request or response bodies.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/http-body-util@0.1.5",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "http-body-util",
+      "versionInfo": "0.1.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-mime-0.3.18",
+      "description": "Strongly Typed Mimes",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/mime@0.3.18",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "mime",
+      "versionInfo": "0.3.18"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tower-0.5.3",
+      "description": "Tower is a library of modular and reusable components for building robust\nclients and servers.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tower@0.5.3",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/tower-rs/tower",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tower",
+      "versionInfo": "0.5.3"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-bumpalo-3.20.4",
+      "description": "A fast bump allocation arena for Rust.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/bumpalo@3.20.4",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "bumpalo",
+      "versionInfo": "3.20.4"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-bitflags-2.13.2",
+      "description": "A macro to generate structures which behave like bitflags.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/bitflags@2.13.2",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/bitflags/bitflags",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "bitflags",
+      "versionInfo": "2.13.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tracing-0.1.44",
+      "description": "Application-level tracing for Rust.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tracing@0.1.44",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://tokio.rs",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tracing",
+      "versionInfo": "0.1.44"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-errno-0.3.15",
+      "description": "Cross-platform interface to the `errno` variable.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/errno@0.3.15",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "errno",
+      "versionInfo": "0.3.15"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-bytes-1.12.1",
+      "description": "Types and traits for working with bytes",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/bytes@1.12.1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "bytes",
+      "versionInfo": "1.12.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-hyper-1.12.0",
+      "description": "A protective and efficient HTTP library for all.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/hyper@1.12.0",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://hyper.rs",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "hyper",
+      "versionInfo": "1.12.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-windows-link-0.2.1",
+      "description": "Linking for Windows",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-link@0.2.1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-link",
+      "versionInfo": "0.2.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-slab-0.4.12",
+      "description": "Pre-allocated storage for a uniform data type",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/slab@0.4.12",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "slab",
+      "versionInfo": "0.4.12"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-mio-1.2.5",
+      "description": "Lightweight non-blocking I/O.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/mio@1.2.5",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/tokio-rs/mio",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "mio",
+      "versionInfo": "1.2.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-core--detect-1.0.0",
+      "description": "A `no_std` version of the `std::is_x86_feature_detected!` macro.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/core_detect@1.0.0",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/thomcc/core_detect",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "core_detect",
+      "versionInfo": "1.0.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-scopeguard-1.2.0",
+      "description": "A RAII scope guard that will run a given closure when it goes out of scope,\neven if the code between panics (assuming unwinding panic).\n\nDefines the macros `defer!`, `defer_on_unwind!`, `defer_on_success!` as\nshorthands for guards with one of the implemented strategies.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/scopeguard@1.2.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "scopeguard",
+      "versionInfo": "1.2.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-windows-implement-0.60.2",
+      "description": "The implement macro for the Windows crates",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-implement@0.60.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-implement",
+      "versionInfo": "0.60.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-windows-interface-0.59.3",
+      "description": "The interface macro for the Windows crates",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-interface@0.59.3",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-interface",
+      "versionInfo": "0.59.3"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tokio-1.54.1",
+      "description": "An event-driven, non-blocking I/O platform for writing asynchronous I/O\nbacked applications.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tokio@1.54.1",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://tokio.rs",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tokio",
+      "versionInfo": "1.54.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-clap-4.6.7",
+      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/clap@4.6.7",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "clap",
+      "versionInfo": "4.6.7"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-once--cell--polyfill-1.70.2",
+      "description": "Polyfill for `OnceCell` stdlib feature for use with older MSRVs",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/once_cell_polyfill@1.70.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "once_cell_polyfill",
+      "versionInfo": "1.70.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-atomic-waker-1.1.2",
+      "description": "A synchronization primitive for task wakeup",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/atomic-waker@1.1.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "Apache-2.0 OR MIT",
+      "licenseDeclared": "Apache-2.0 OR MIT",
+      "name": "atomic-waker",
+      "versionInfo": "1.1.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-encoding--rs-0.8.44",
+      "description": "A Gecko-oriented implementation of the Encoding Standard",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/encoding_rs@0.8.44",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://docs.rs/encoding_rs/",
+      "licenseConcluded": "(Apache-2.0 OR MIT) AND BSD-3-Clause",
+      "licenseDeclared": "(Apache-2.0 OR MIT) AND BSD-3-Clause",
+      "name": "encoding_rs",
+      "versionInfo": "0.8.44"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-memchr-2.8.3",
+      "description": "Provides extremely fast (uses SIMD on x86_64, aarch64 and wasm32) routines for\n1, 2 or 3 byte search and single substring search.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/memchr@2.8.3",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/BurntSushi/memchr",
+      "licenseConcluded": "Unlicense OR MIT",
+      "licenseDeclared": "Unlicense OR MIT",
+      "name": "memchr",
+      "versionInfo": "2.8.3"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-chrono-0.4.45",
+      "description": "Date and time library for Rust",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/chrono@0.4.45",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/chronotope/chrono",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "chrono",
+      "versionInfo": "0.4.45"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-anstyle-1.0.14",
+      "description": "ANSI text styling",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/anstyle@1.0.14",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "anstyle",
+      "versionInfo": "1.0.14"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-clap--derive-4.6.7",
+      "description": "Parse command line argument by defining a struct, derive crate.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/clap_derive@4.6.7",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "clap_derive",
+      "versionInfo": "4.6.7"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tower-http-0.6.11",
+      "description": "Tower middleware and utilities for HTTP clients and servers",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tower-http@0.6.11",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/tower-rs/tower-http",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tower-http",
+      "versionInfo": "0.6.11"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-clap--builder-4.6.7",
+      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/clap_builder@4.6.7",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "clap_builder",
+      "versionInfo": "4.6.7"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-windows-strings-0.5.1",
+      "description": "Windows string types",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-strings@0.5.1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-strings",
+      "versionInfo": "0.5.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-wasm-bindgen-macro-support-0.2.130",
+      "description": "Implementation APIs for the `#[wasm_bindgen]` attribute",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/wasm-bindgen-macro-support@0.2.130",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-macro-support",
+      "versionInfo": "0.2.130"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-byteorder-lite-0.1.0",
+      "description": "Library for reading/writing numbers in big-endian and little-endian.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/byteorder-lite@0.1.0",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/image-rs/byteorder-lite",
+      "licenseConcluded": "Unlicense OR MIT",
+      "licenseDeclared": "Unlicense OR MIT",
+      "name": "byteorder-lite",
+      "versionInfo": "0.1.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-futures-task-0.3.34",
+      "description": "Tools for working with tasks.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/futures-task@0.3.34",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://rust-lang.github.io/futures-rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "futures-task",
+      "versionInfo": "0.3.34"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-unicode-ident-1.0.27",
+      "description": "Determine whether characters have the XID_Start or XID_Continue properties according to Unicode Standard Annex #31",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/unicode-ident@1.0.27",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "licenseDeclared": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "name": "unicode-ident",
+      "versionInfo": "1.0.27"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-http-1.5.0",
+      "description": "A set of types for representing HTTP requests and responses.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/http@1.5.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "http",
+      "versionInfo": "1.5.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-landir-0.1.0",
+      "description": "LAN file upload server (Rust implementation, distributed as a container image)",
+      "downloadLocation": "NONE",
+      "licenseConcluded": "NOASSERTION",
+      "name": "landir",
+      "versionInfo": "0.1.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tokio-macros-2.7.2",
+      "description": "Tokio's proc macros.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tokio-macros@2.7.2",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://tokio.rs",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tokio-macros",
+      "versionInfo": "2.7.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tower-layer-0.3.3",
+      "description": "Decorates a `Service` to allow easy composition between `Service`s.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tower-layer@0.3.3",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/tower-rs/tower",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tower-layer",
+      "versionInfo": "0.3.3"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-matchit-0.8.4",
+      "description": "A high performance, zero-copy URL router.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/matchit@0.8.4",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT AND BSD-3-Clause",
+      "licenseDeclared": "MIT AND BSD-3-Clause",
+      "name": "matchit",
+      "versionInfo": "0.8.4"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-multer-3.1.0",
+      "description": "An async parser for `multipart/form-data` content-type in Rust.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/multer@3.1.0",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/rwf2/multer",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "multer",
+      "versionInfo": "3.1.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-iana-time-zone-0.1.65",
+      "description": "get the IANA time zone for the current system",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/iana-time-zone@0.1.65",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "iana-time-zone",
+      "versionInfo": "0.1.65"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-futures-util-0.3.34",
+      "description": "Common utilities and extension traits for the futures-rs library.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/futures-util@0.3.34",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://rust-lang.github.io/futures-rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "futures-util",
+      "versionInfo": "0.3.34"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-http-body-1.1.0",
+      "description": "Trait representing an asynchronous, streaming, HTTP request or response body.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/http-body@1.1.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "http-body",
+      "versionInfo": "1.1.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-log-0.4.35",
+      "description": "A lightweight logging facade for Rust\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/log@0.4.35",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "log",
+      "versionInfo": "0.4.35"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-syn-2.0.119",
+      "description": "Parser for Rust source code",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/syn@2.0.119",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "syn",
+      "versionInfo": "2.0.119"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-core-foundation-sys-0.8.7",
+      "description": "Bindings to Core Foundation for macOS",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/core-foundation-sys@0.8.7",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/servo/core-foundation-rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "core-foundation-sys",
+      "versionInfo": "0.8.7"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-anstyle-wincon-3.0.11",
+      "description": "Styling legacy Windows terminals",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/anstyle-wincon@3.0.11",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "anstyle-wincon",
+      "versionInfo": "3.0.11"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-wasm-bindgen-macro-0.2.130",
+      "description": "Definition of the `#[wasm_bindgen]` attribute, an internal dependency\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/wasm-bindgen-macro@0.2.130",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-macro",
+      "versionInfo": "0.2.130"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-colorchoice-1.0.5",
+      "description": "Global override of color control",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/colorchoice@1.0.5",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "colorchoice",
+      "versionInfo": "1.0.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-syn-3.0.10",
+      "description": "Parser for Rust source code",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/syn@3.0.10",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "syn",
+      "versionInfo": "3.0.10"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-spin-0.9.9",
+      "description": "Spin-based synchronization primitives",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/spin@0.9.9",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "spin",
+      "versionInfo": "0.9.9"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-quote-1.0.47",
+      "description": "Quasi-quoting macro quote!(...)",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/quote@1.0.47",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "quote",
+      "versionInfo": "1.0.47"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-sync--wrapper-1.0.2",
+      "description": "A tool for enlisting the compiler's help in proving the absence of concurrency",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/sync_wrapper@1.0.2",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://docs.rs/sync_wrapper",
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "name": "sync_wrapper",
+      "versionInfo": "1.0.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-axum-core-0.5.6",
+      "description": "Core types and traits for axum",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/axum-core@0.5.6",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/tokio-rs/axum",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "axum-core",
+      "versionInfo": "0.5.6"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-multiversion--no--op-1.0.0",
+      "description": "Provides a pass-through function attribute called multiversion for optimizing build times",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/multiversion_no_op@1.0.0",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://docs.rs/multiversion_no_op/",
+      "licenseConcluded": "Apache-2.0 OR MIT",
+      "licenseDeclared": "Apache-2.0 OR MIT",
+      "name": "multiversion_no_op",
+      "versionInfo": "1.0.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-percent-encoding-2.3.2",
+      "description": "Percent encoding and decoding",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/percent-encoding@2.3.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "percent-encoding",
+      "versionInfo": "2.3.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-anstyle-query-1.1.5",
+      "description": "Look up colored console capabilities",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/anstyle-query@1.1.5",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "anstyle-query",
+      "versionInfo": "1.1.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-httparse-1.10.1",
+      "description": "A tiny, safe, speedy, zero-copy HTTP/1.x parser.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/httparse@1.10.1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "httparse",
+      "versionInfo": "1.10.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-windows-sys-0.61.2",
+      "description": "Rust for Windows",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-sys@0.61.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-sys",
+      "versionInfo": "0.61.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-clap--lex-1.1.1",
+      "description": "Minimal, flexible command line parser",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/clap_lex@1.1.1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "clap_lex",
+      "versionInfo": "1.1.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-bytemuck-1.25.2",
+      "description": "A crate for mucking around with piles of bytes.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/bytemuck@1.25.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "Zlib OR Apache-2.0 OR MIT",
+      "licenseDeclared": "Zlib OR Apache-2.0 OR MIT",
+      "name": "bytemuck",
+      "versionInfo": "1.25.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-hyper-util-0.1.21",
+      "description": "hyper utilities",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/hyper-util@0.1.21",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://hyper.rs",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "hyper-util",
+      "versionInfo": "0.1.21"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-wasm-bindgen-0.2.130",
+      "description": "Easy support for interacting between JS and Rust.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/wasm-bindgen@0.2.130",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://wasm-bindgen.github.io/wasm-bindgen",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen",
+      "versionInfo": "0.2.130"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-windows-core-0.62.2",
+      "description": "Core type support for COM and Windows",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-core@0.62.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-core",
+      "versionInfo": "0.62.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tower-service-0.3.3",
+      "description": "Trait representing an asynchronous, request / response based, client or server.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tower-service@0.3.3",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/tower-rs/tower",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tower-service",
+      "versionInfo": "0.3.3"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-socket2-0.6.5",
+      "description": "Utilities for handling networking sockets with a maximal amount of configuration\npossible intended.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/socket2@0.6.5",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/rust-lang/socket2",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "socket2",
+      "versionInfo": "0.6.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-serde--core-1.0.229",
+      "description": "Serde traits only, with no support for derive -- use the `serde` crate instead",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/serde_core@1.0.229",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://serde.rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "serde_core",
+      "versionInfo": "1.0.229"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-wasi-0.11.1-plus-wasi-snapshot-preview1",
+      "description": "Experimental WASI API bindings for Rust",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/wasi@0.11.1%2Bwasi-snapshot-preview1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "Apache-2.0 OR Apache-2.0 OR MIT",
+      "licenseDeclared": "Apache-2.0 OR Apache-2.0 OR MIT",
+      "name": "wasi",
+      "versionInfo": "0.11.1+wasi-snapshot-preview1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-iana-time-zone-haiku-0.1.2",
+      "description": "iana-time-zone support crate for Haiku OS",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/iana-time-zone-haiku@0.1.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "iana-time-zone-haiku",
+      "versionInfo": "0.1.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-itoa-1.0.19",
+      "description": "Fast integer primitive to string conversion",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/itoa@1.0.19",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "itoa",
+      "versionInfo": "1.0.19"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-num-traits-0.2.19",
+      "description": "Numeric traits for generic mathematics",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/num-traits@0.2.19",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/rust-num/num-traits",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "num-traits",
+      "versionInfo": "0.2.19"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-proc-macro2-1.0.107",
+      "description": "A substitute implementation of the compiler's `proc_macro` API to decouple token-based libraries from the procedural macro use case.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/proc-macro2@1.0.107",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "proc-macro2",
+      "versionInfo": "1.0.107"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-tracing-core-0.1.36",
+      "description": "Core primitives for application-level tracing.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/tracing-core@0.1.36",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://tokio.rs",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "tracing-core",
+      "versionInfo": "0.1.36"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-anstyle-parse-1.0.0",
+      "description": "Parse ANSI Style Escapes",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/anstyle-parse@1.0.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "anstyle-parse",
+      "versionInfo": "1.0.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-strsim-0.11.1",
+      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein,\nOSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/strsim@0.11.1",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/rapidfuzz/strsim-rs",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "strsim",
+      "versionInfo": "0.11.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-serde--derive-1.0.229",
+      "description": "Macros 1.1 implementation of #[derive(Serialize, Deserialize)]",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/serde_derive@1.0.229",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://serde.rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "serde_derive",
+      "versionInfo": "1.0.229"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-wasm-bindgen-shared-0.2.130",
+      "description": "Shared support between wasm-bindgen and wasm-bindgen cli, an internal\ndependency.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/wasm-bindgen-shared@0.2.130",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "wasm-bindgen-shared",
+      "versionInfo": "0.2.130"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-simdutf8-0.1.5",
+      "description": "SIMD-accelerated UTF-8 validation.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/simdutf8@0.1.5",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/rusticstuff/simdutf8",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "simdutf8",
+      "versionInfo": "0.1.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-libc-0.2.191",
+      "description": "Raw FFI bindings to platform libraries like libc.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/libc@0.2.191",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "libc",
+      "versionInfo": "0.2.191"
+    }
+  ],
+  "relationships": [
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-1.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-http-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-libc-0.2.191",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-errno-0.3.15"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-http-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tracing-core-0.1.36",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tracing-0.1.44"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-File-landir",
+      "relationshipType": "DESCRIBES",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-signal-hook-registry-1.4.8",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-1.54.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-body-1.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-qrcode-0.14.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-landir-0.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tokio-1.54.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-core-foundation-sys-0.8.7",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-iana-time-zone-0.1.65"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--derive-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-link-0.2.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-chrono-0.4.45"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-util-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-js-sys-0.3.107"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--derive-1.0.229"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tracing-0.1.44"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-libc-0.2.191",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-signal-hook-registry-1.4.8"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-socket2-0.6.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-memchr-2.8.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-multer-3.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tokio-1.54.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-util-0.7.20"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-sink-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-util-0.7.20"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-core-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-util-0.7.20"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-0.5.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-sync--wrapper-1.0.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-0.5.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-atomic-waker-1.1.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-mime-0.3.18",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-link-0.2.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-core-0.62.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-heck-0.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--derive-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-num-traits-0.2.19",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-image-0.25.10"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-clap--lex-1.1.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-libc-0.2.191",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-mio-1.2.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-libc-0.2.191",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-android--system--properties-0.1.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytemuck-1.25.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-image-0.25.10"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-axum-core-0.5.6",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-simdutf8-0.1.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-encoding--rs-0.8.44"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-cfg-if-1.0.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-itoa-1.0.19",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-unicode-ident-1.0.27",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-syn-3.0.10"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-wasm-bindgen-shared-0.2.130",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-macro-support-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-implement-0.60.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-core-0.62.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-body-1.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tracing-0.1.44",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-http-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-interface-0.59.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-core-0.62.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-byteorder-lite-0.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-image-0.25.10"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-android--system--properties-0.1.6",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-iana-time-zone-0.1.65"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-1.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-clap-4.6.7",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-landir-0.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-multer-3.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-1.5.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-body-1.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-body-util-0.1.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-httparse-1.10.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-scopeguard-1.2.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-encoding--rs-0.8.44"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-js-sys-0.3.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-iana-time-zone-0.1.65"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-syn-3.0.10",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-macro-support-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-syn-3.0.10"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-macro-support-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-itoa-1.0.19",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-slab-0.4.12",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-futures-util-0.3.34"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-syn-3.0.10"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-axum-0.8.9",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-landir-0.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-service-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-util-0.1.21"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-1.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-multer-3.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-cfg-if-1.0.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-encoding--rs-0.8.44"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-layer-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-0.5.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-syn-2.0.119",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-implement-0.60.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-clap--builder-4.6.7",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-hyper-1.12.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-util-0.1.21"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-util-0.1.21"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-percent-encoding-2.3.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-parse-1.0.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tokio-1.54.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-0.5.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-iana-time-zone-0.1.65",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-chrono-0.4.45"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-implement-0.60.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-1.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-core-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-futures-util-0.3.34"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-futures-util-0.3.34"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-syn-3.0.10",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-macros-2.7.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-body-1.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-util-0.1.21"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-macro-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-wasm-bindgen-shared-0.2.130",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-macro-support-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-util-0.7.20"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-body-1.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-http-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bitflags-2.13.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-http-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-strsim-0.11.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-util-0.1.21"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-utf8parse-0.2.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstyle-parse-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-num-traits-0.2.19",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-moxcms-0.8.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-chrono-0.4.45",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-landir-0.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-body-util-0.1.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-errno-0.3.15"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-1.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-body-util-0.1.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-syn-2.0.119",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-interface-0.59.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-sync--wrapper-1.0.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-once--cell--polyfill-1.70.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstyle-wincon-3.0.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-percent-encoding-2.3.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-landir-0.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-layer-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-libc-0.2.191",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-1.54.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-strings-0.5.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-core-0.62.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-matchit-0.8.4",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-num-traits-0.2.19",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-chrono-0.4.45"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-unicode-ident-1.0.27",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-shared-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-core-0.62.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-iana-time-zone-0.1.65"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-log-0.4.35",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-iana-time-zone-0.1.65"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-is--terminal--polyfill-1.70.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bumpalo-3.20.4",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-macro-support-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-wincon-3.0.11",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-syn-2.0.119"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-util-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-0.5.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-query-1.1.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-service-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-macros-2.7.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-clap--derive-4.6.7",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstyle-query-1.1.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-link-0.2.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-result-0.4.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-syn-3.0.10",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--derive-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-util-0.7.20"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-landir-0.1.0",
+      "relationshipType": "GENERATED_FROM",
+      "spdxElementId": "SPDXRef-File-landir"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-syn-3.0.10",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--derive-1.0.229"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-mio-1.2.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-cfg-if-1.0.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-js-sys-0.3.107"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-body-util-0.1.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tokio-1.54.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-body-util-0.1.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-util-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-multer-3.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-http-0.6.11",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-landir-0.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-service-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-0.5.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pxfm-0.1.30",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-moxcms-0.8.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-core-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-0.5.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-hyper-util-0.1.21",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-layer-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-wasi-0.11.1-plus-wasi-snapshot-preview1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-mio-1.2.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-service-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-http-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-itoa-1.0.19",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-1.5.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tokio-1.54.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-landir-0.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-1.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-body-1.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tokio-macros-2.7.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-1.54.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-1.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-unicode-ident-1.0.27",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-proc-macro2-1.0.107"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-quote-1.0.47"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-body-1.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-wasm-bindgen-0.2.130",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-js-sys-0.3.107"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstyle-wincon-3.0.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde--core-1.0.229",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-hyper-1.12.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-spin-0.9.9",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-multer-3.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-implement-0.60.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--derive-1.0.229"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-syn-2.0.119"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-interface-0.59.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-encoding--rs-0.8.44",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-multer-3.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-socket2-0.6.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-1.54.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-wasm-bindgen-macro-support-0.2.130",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-macro-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-libc-0.2.191",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-socket2-0.6.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-layer-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-http-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-mime-0.3.18",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-colorchoice-1.0.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-body-1.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-http-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-1.54.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-body-util-0.1.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tower-service-0.3.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde--derive-1.0.229",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--core-1.0.229"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-multiversion--no--op-1.0.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-encoding--rs-0.8.44"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-link-0.2.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-sys-0.61.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-util-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-link-0.2.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-strings-0.5.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-core-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-http-1.5.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-util-0.1.21"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-1.54.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-memchr-2.8.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-mio-1.2.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-1.54.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tokio-1.54.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-util-0.1.21"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-wasm-bindgen-0.2.130",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-iana-time-zone-0.1.65"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-wasm-bindgen-macro-0.2.130",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-wasm-bindgen-0.2.130"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-multer-3.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-core-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tokio-macros-2.7.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-bytes-1.12.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-0.8.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-unicode-ident-1.0.27",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-syn-2.0.119"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstream-1.0.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-sync--wrapper-1.0.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-tower-0.5.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-tokio-util-0.7.20",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-landir-0.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-task-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-futures-util-0.3.34"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-mime-0.3.18",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-multer-3.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-httparse-1.10.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-multer-3.1.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-core--detect-1.0.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-encoding--rs-0.8.44"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-iana-time-zone-haiku-0.1.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-iana-time-zone-0.1.65"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstyle-wincon-3.0.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-errno-0.3.15",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-signal-hook-registry-1.4.8"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-utf8parse-0.2.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-image-0.25.10",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-qrcode-0.14.1"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-result-0.4.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-core-0.62.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-moxcms-0.8.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-image-0.25.10"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-smallvec-1.16.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.107",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-windows-interface-0.59.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-httpdate-1.0.3",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-hyper-1.12.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-futures-core-0.3.34",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-http-body-util-0.1.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.47",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--derive-4.6.7"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-pin-project-lite-0.2.17",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-axum-core-0.5.6"
+    }
+  ],
+  "spdxVersion": "SPDX-2.3"
+}

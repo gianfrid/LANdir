@@ -59,6 +59,15 @@ cargo test              # unit + in-process endpoint tests (no sockets)
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
+## Supply chain
+
+- `SBOM.spdx.json` — SPDX SBOM of every third-party crate (regenerate after any
+  dependency change with `cargo sbom > SBOM.spdx.json`, requires `cargo install cargo-sbom`)
+- `cargo audit` — vulnerability scan of `Cargo.lock` against the RustSec
+  advisory database (requires `cargo install cargo-audit`); currently clean
+- The container base is `gcr.io/distroless/static-debian13` (pinned `:latest`
+  tag of the current Debian stable)
+
 ## See Also
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Technical architecture details
