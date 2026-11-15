@@ -4,6 +4,10 @@ A single-file, zero-dependency Python HTTP server that lets any device on the LA
 
 > **Warning: LAN-only tool.** The server has no authentication by default (use `--secret`) and no upload size limit. Never expose it to the internet — bind it to your local network only.
 
+## Project objectives
+
+- **Feature parity:** `landir.py` (Python) and `src/` (Rust) must stay behaviorally identical — same CLI flags, same endpoints, same responses, same security rules. `landir.py` is the reference implementation; any behavior change lands there first (with tests), then is ported to Rust.
+
 ## Layout
 
 - `landir.py` — single-file, zero-dependency Python application (server, HTML page, upload handling, QR code encoder/renderer). Reference implementation; must run on a bare python3.

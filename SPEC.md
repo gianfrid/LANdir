@@ -41,7 +41,8 @@ Check the uploads directory after each case. Kill the server afterwards.
 ## Conventions
 
 - `landir.py` stays a single file with module-level helpers (it must run on a bare python3); the HTML/CSS/JS lives in the `PAGE` constant.
-- The Rust implementation is a Cargo project under `src/` (single-file/zero-dependency does NOT apply to it; it ships as a container image). Both implementations must expose identical endpoints and preserve the security rules above.
+- The Rust implementation is a Cargo project under `src/` (single-file/zero-dependency does NOT apply to it; it ships as a container image).
+- **Feature parity is a project objective:** both implementations must expose identical CLI flags, endpoints, and behavior, and must preserve the security rules above. `landir.py` is the reference implementation — a behavior change is made there first (with a test), then ported to Rust (with an equivalent test).
 - Prefer small, targeted edits.
 - Comments only where behavior is non-obvious; the code is meant to be read top to bottom.
 
