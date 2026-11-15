@@ -136,5 +136,12 @@ async fn main() {
         paths,
     });
     let app = server::router(state).layer(tower_http::trace::TraceLayer::new_for_http());
-    axum::serve(listener, app).await.expect("server error");
+    // As PID 1 in a container the kernel only delivers signals that have a
+    // handler installed; without this, Ctrl+C/SIGINT would be dropped.
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await
+        .expect("server error");
 }

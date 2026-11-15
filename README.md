@@ -33,8 +33,10 @@ A `Containerfile` (podman/docker compatible) is included. Base image: `python:3.
 podman build -f Containerfile -t landir .
 # docker build -f Containerfile -t landir .   # also works
 
-# run (uploads persist to ./uploads on the host; :U fixes volume ownership)
-podman run --rm -p 8000:8000 -v ./uploads:/app/uploads:U landir
+# run (-it attaches a TTY so Ctrl+C stops the server; uploads persist to
+# ./uploads on the host; :U fixes volume ownership)
+podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads:U landir
+# docker run --rm -it -p 8000:8000 -v ./uploads:/app/uploads landir   # also works
 # open http://<host-ip>:8000/
 ```
 
@@ -59,8 +61,9 @@ the Python one; the static binary is ~1.3 MB):
 podman build -f Containerfile.rust -t landir-rust .
 # docker build -f Containerfile.rust -t landir-rust .   # also works
 
-# run (runs as UID 65532; uploads persist to ./uploads on the host)
-podman run --rm -p 8000:8000 -v ./uploads:/app/uploads landir-rust
+# run (-it attaches a TTY so Ctrl+C stops the server; runs as UID 65532;
+# uploads persist to ./uploads on the host)
+podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads landir-rust
 # open http://<host-ip>:8000/
 ```
 
