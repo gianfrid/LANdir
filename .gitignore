@@ -2,3 +2,5 @@ uploads
 __pycache__/
 /target
 .agents/
+scripts/watch-apk.log
+scripts/.watch-apk-state

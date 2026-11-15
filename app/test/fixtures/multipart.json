@@ -1,0 +1,78 @@
+[
+  {
+    "name": "simple",
+    "boundary": "BOUNDARY",
+    "body_hex": "2d2d424f554e444152590d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d2268656c6c6f2e747874220d0a436f6e74656e742d547970653a20746578742f706c61696e0d0a0d0a48656c6c6f2c20576f726c64210d0a2d2d424f554e444152592d2d0d0a",
+    "expected": [
+      {
+        "filename": "hello.txt",
+        "data_hex": "48656c6c6f2c20576f726c6421"
+      }
+    ]
+  },
+  {
+    "name": "binary_with_crlf",
+    "boundary": "BND",
+    "body_hex": "2d2d424e440d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d2262696e2e646174220d0a0d0a6c696e65310d0a6c696e65320d0a0d0a6c696e65330d0a2d2d424e442d2d0d0a",
+    "expected": [
+      {
+        "filename": "bin.dat",
+        "data_hex": "6c696e65310d0a6c696e65320d0a0d0a6c696e6533"
+      }
+    ]
+  },
+  {
+    "name": "multi",
+    "boundary": "XYZ",
+    "body_hex": "2d2d58595a0d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d22612e747874220d0a0d0a4141410d0a2d2d58595a0d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d22622e747874220d0a0d0a4242420d0a2d2d58595a2d2d0d0a",
+    "expected": [
+      {
+        "filename": "a.txt",
+        "data_hex": "414141"
+      },
+      {
+        "filename": "b.txt",
+        "data_hex": "424242"
+      }
+    ]
+  },
+  {
+    "name": "traversal_filename",
+    "boundary": "T",
+    "body_hex": "2d2d540d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d222e2e2f2e2e2f6576696c2e747874220d0a0d0a6576696c20636f6e74656e740d0a2d2d542d2d0d0a",
+    "expected": [
+      {
+        "filename": "../../evil.txt",
+        "data_hex": "6576696c20636f6e74656e74"
+      }
+    ]
+  },
+  {
+    "name": "empty_file",
+    "boundary": "E",
+    "body_hex": "2d2d450d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d22656d7074792e747874220d0a0d0a0d0a2d2d452d2d0d0a",
+    "expected": [
+      {
+        "filename": "empty.txt",
+        "data_hex": ""
+      }
+    ]
+  },
+  {
+    "name": "no_filename",
+    "boundary": "N",
+    "body_hex": "2d2d4e0d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d226669656c64220d0a0d0a76616c75650d0a2d2d4e2d2d0d0a",
+    "expected": []
+  },
+  {
+    "name": "utf8_filename",
+    "boundary": "U",
+    "body_hex": "2d2d550d0a436f6e74656e742d446973706f736974696f6e3a20666f726d2d646174613b206e616d653d2266696c65223b2066696c656e616d653d22636166c3a92e747874220d0a0d0a636f666665650d0a2d2d552d2d0d0a",
+    "expected": [
+      {
+        "filename": "caf\u00e9.txt",
+        "data_hex": "636f66666565"
+      }
+    ]
+  }
+]

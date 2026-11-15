@@ -12,6 +12,7 @@ A single-file, zero-dependency Python HTTP server that lets any device on the LA
 
 - `landir.py` — single-file, zero-dependency Python application (server, HTML page, upload handling, QR code encoder/renderer). Reference implementation; must run on a bare python3.
 - `src/` + `Cargo.toml` — Rust implementation (axum/tokio). Same CLI and endpoints; distributed as a container image, so crates are fine here.
+- `app/` — Flutter app (Android, iOS, Linux desktop). Hosts the drop server on the phone and acts as a client to any Landir server. Pure-Dart core in `app/lib/src/core/` is tested against golden vectors from `landir.py`. See [ARCHITECTURE.md](ARCHITECTURE.md) and [ADR 0001](docs/adr/0001-flutter-multiplatform.md).
 - `tests/test_landir.py` — stdlib-unittest suite for the Python version (no dependencies).
 - `uploads/` — default upload target, created on start. Runtime data, do not commit.
 
@@ -59,6 +60,35 @@ cargo test              # unit + in-process endpoint tests (no sockets)
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
+## Flutter app (Android / iOS / Linux)
+
+The `app/` directory is a Flutter project implementing the host server (role #1)
+and client (role #2) for Android, iOS, and Linux desktop. The security-critical
+core (`app/lib/src/core/`) is pure Dart, tested against golden vectors exported
+from `landir.py` via `scripts/export_golden.py`.
+
+```bash
+cd app
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs   # regenerate Riverpod providers
+dart test test/core/                                        # pure-Dart core tests (no device)
+flutter test                                                # widget tests
+flutter analyze
+
+# Run on a connected device or desktop:
+flutter run                       # debug build
+flutter run -d linux              # Linux desktop
+
+# Release builds:
+flutter build apk --release       # Android (sideload; debug-signed until a release key is configured)
+flutter build ios --release       # iOS (requires Xcode + Apple Developer account)
+flutter build linux --release     # Linux desktop bundle
+```
+
+See [TODO.md](TODO.md) for remaining release tasks and [GLOSSARY.md](GLOSSARY.md) for terminology.
+
+> **Platform caveats:** on iOS the server runs only while the app is in the foreground (Apple suspends backgrounded apps — shown as an in-app warning). On Android a foreground service keeps it alive, but some OEMs (MIUI et al.) may still kill it. See [ADR 0001](docs/adr/0001-flutter-multiplatform.md).
+
 ## Supply chain
 
 - `SBOM.spdx.json` — SPDX SBOM of every third-party crate (regenerate after any
@@ -80,9 +110,11 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 ## See Also
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Technical architecture details
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Technical architecture of all three implementations
 - [SPEC.md](SPEC.md) — Security rules, testing, and conventions
-- [TODO.md](TODO.md) — Roadmap (Android port plan)
+- [TODO.md](TODO.md) — Remaining release tasks
+- [GLOSSARY.md](GLOSSARY.md) — Project terminology
+- [docs/adr/0001-flutter-multiplatform.md](docs/adr/0001-flutter-multiplatform.md) — Why the app is Flutter, and its deliberate platform limitations
 
 ## License
 

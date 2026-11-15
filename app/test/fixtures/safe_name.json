@@ -1,0 +1,322 @@
+[
+  {
+    "input": "../../etc/passwd",
+    "kind": "exact",
+    "output": "passwd"
+  },
+  {
+    "input": "..\\..\\windows\\system32\\evil.dll",
+    "kind": "exact",
+    "output": "evil.dll"
+  },
+  {
+    "input": "/etc/passwd",
+    "kind": "exact",
+    "output": "passwd"
+  },
+  {
+    "input": "....//....//etc/passwd",
+    "kind": "exact",
+    "output": "passwd"
+  },
+  {
+    "input": ".bashrc",
+    "kind": "exact",
+    "output": "bashrc"
+  },
+  {
+    "input": "..",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": ".",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "...",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "....",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "normal.txt",
+    "kind": "exact",
+    "output": "normal.txt"
+  },
+  {
+    "input": "with space.txt",
+    "kind": "exact",
+    "output": "with space.txt"
+  },
+  {
+    "input": "with[bracket].txt",
+    "kind": "exact",
+    "output": "with[bracket].txt"
+  },
+  {
+    "input": "with(paren).txt",
+    "kind": "exact",
+    "output": "with(paren).txt"
+  },
+  {
+    "input": "dash-file.txt",
+    "kind": "exact",
+    "output": "dash-file.txt"
+  },
+  {
+    "input": "under_score.txt",
+    "kind": "exact",
+    "output": "under_score.txt"
+  },
+  {
+    "input": "UPPER.TXT",
+    "kind": "exact",
+    "output": "UPPER.TXT"
+  },
+  {
+    "input": "unicode_é_ñ_日本語.txt",
+    "kind": "exact",
+    "output": "unicode________.txt"
+  },
+  {
+    "input": "semi;colon.txt",
+    "kind": "exact",
+    "output": "semi_colon.txt"
+  },
+  {
+    "input": "quote\"file.txt",
+    "kind": "exact",
+    "output": "quote_file.txt"
+  },
+  {
+    "input": "new\nline.txt",
+    "kind": "exact",
+    "output": "newline.txt"
+  },
+  {
+    "input": "null\u0000byte.txt",
+    "kind": "exact",
+    "output": "nullbyte.txt"
+  },
+  {
+    "input": "tab\there.txt",
+    "kind": "exact",
+    "output": "tabhere.txt"
+  },
+  {
+    "input": "%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    "kind": "exact",
+    "output": "passwd"
+  },
+  {
+    "input": "%2Fetc%2Fpasswd",
+    "kind": "exact",
+    "output": "passwd"
+  },
+  {
+    "input": "%2e%2e%5c%2e%2e%5cwindows",
+    "kind": "exact",
+    "output": "windows"
+  },
+  {
+    "input": "con",
+    "kind": "exact",
+    "output": "con"
+  },
+  {
+    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "kind": "exact",
+    "output": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+    "input": "file.with.many.dots.txt",
+    "kind": "exact",
+    "output": "file.with.many.dots.txt"
+  },
+  {
+    "input": "trailing.dot.",
+    "kind": "exact",
+    "output": "trailing.dot."
+  },
+  {
+    "input": " leading space.txt",
+    "kind": "exact",
+    "output": "leading space.txt"
+  },
+  {
+    "input": "trailing space .txt",
+    "kind": "exact",
+    "output": "trailing space .txt"
+  },
+  {
+    "input": "emoji_😀.txt",
+    "kind": "exact",
+    "output": "emoji__.txt"
+  },
+  {
+    "input": "back\\slash.txt",
+    "kind": "exact",
+    "output": "slash.txt"
+  },
+  {
+    "input": "slash/inside.txt",
+    "kind": "exact",
+    "output": "inside.txt"
+  },
+  {
+    "input": "double//slash.txt",
+    "kind": "exact",
+    "output": "slash.txt"
+  },
+  {
+    "input": "",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "   ",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "\u0000",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "café.txt",
+    "kind": "exact",
+    "output": "caf_.txt"
+  },
+  {
+    "input": "file.tar.gz",
+    "kind": "exact",
+    "output": "file.tar.gz"
+  },
+  {
+    "input": "no_extension",
+    "kind": "exact",
+    "output": "no_extension"
+  },
+  {
+    "input": ".hidden",
+    "kind": "exact",
+    "output": "hidden"
+  },
+  {
+    "input": "..hidden",
+    "kind": "exact",
+    "output": "hidden"
+  },
+  {
+    "input": "crlf\r\ninjection.txt",
+    "kind": "exact",
+    "output": "crlfinjection.txt"
+  },
+  {
+    "input": "header: injection.txt",
+    "kind": "exact",
+    "output": "header_ injection.txt"
+  },
+  {
+    "input": "quote\"injection.txt",
+    "kind": "exact",
+    "output": "quote_injection.txt"
+  },
+  {
+    "input": "..%2F..%2F..%2Froot%2Fpasswd",
+    "kind": "exact",
+    "output": "passwd"
+  },
+  {
+    "input": "%252e%252e%252f double-encoded",
+    "kind": "exact",
+    "output": "_2e_2e_2f double-encoded"
+  },
+  {
+    "input": "....//....//....//etc/passwd",
+    "kind": "exact",
+    "output": "passwd"
+  },
+  {
+    "input": "..;/..;/etc/passwd",
+    "kind": "exact",
+    "output": "passwd"
+  },
+  {
+    "input": "con.txt",
+    "kind": "exact",
+    "output": "con.txt"
+  },
+  {
+    "input": "aux",
+    "kind": "exact",
+    "output": "aux"
+  },
+  {
+    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "kind": "exact",
+    "output": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+    "input": "file.txt",
+    "kind": "exact",
+    "output": "file.txt"
+  },
+  {
+    "input": "semi;colon;pipe|.txt",
+    "kind": "exact",
+    "output": "semi_colon_pipe_.txt"
+  },
+  {
+    "input": "<script>alert(1)</script>.txt",
+    "kind": "exact",
+    "output": "script_.txt"
+  },
+  {
+    "input": "{{template}}.txt",
+    "kind": "exact",
+    "output": "__template__.txt"
+  },
+  {
+    "input": "<%=code%>.txt",
+    "kind": "exact",
+    "output": "___code__.txt"
+  },
+  {
+    "input": "%00null.txt",
+    "kind": "exact",
+    "output": "null.txt"
+  },
+  {
+    "input": "trailing\\",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "/",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "//",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "\\",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  },
+  {
+    "input": "....",
+    "kind": "pattern",
+    "pattern": "^file_\\d{8}_\\d{6}_\\d{6}$"
+  }
+]

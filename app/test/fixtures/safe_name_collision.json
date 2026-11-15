@@ -1,0 +1,5 @@
+{
+  "input": "collision.txt",
+  "pattern": "^collision_\\d{8}_\\d{6}\\.txt$",
+  "output": "collision_20261115_180458.txt"
+}

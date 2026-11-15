@@ -1,0 +1,123 @@
+[
+  {
+    "input": "normal.txt",
+    "found": true,
+    "rel": "normal.txt"
+  },
+  {
+    "input": "../etc/passwd",
+    "found": false
+  },
+  {
+    "input": "..\\..\\windows",
+    "found": false
+  },
+  {
+    "input": "%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    "found": false
+  },
+  {
+    "input": "folder/file.txt",
+    "found": true,
+    "rel": "folder/file.txt"
+  },
+  {
+    "input": "folder/sub/file.txt",
+    "found": true,
+    "rel": "folder/sub/file.txt"
+  },
+  {
+    "input": "%2Fetc%2Fpasswd",
+    "found": false
+  },
+  {
+    "input": ".hidden",
+    "found": false
+  },
+  {
+    "input": "..",
+    "found": false
+  },
+  {
+    "input": ".",
+    "found": false
+  },
+  {
+    "input": "nonexistent.txt",
+    "found": false
+  },
+  {
+    "input": "folder",
+    "found": false
+  },
+  {
+    "input": "",
+    "found": false
+  },
+  {
+    "input": "normal.txt/extra",
+    "found": false
+  },
+  {
+    "input": "semi;colon.txt",
+    "found": false
+  },
+  {
+    "input": "with space.txt",
+    "found": true,
+    "rel": "with space.txt"
+  },
+  {
+    "input": "unicode_é.txt",
+    "found": false
+  },
+  {
+    "input": "..%2F..%2Fescape",
+    "found": false
+  },
+  {
+    "input": "folder/../normal.txt",
+    "found": false
+  },
+  {
+    "input": "folder/../../etc/passwd",
+    "found": false
+  },
+  {
+    "input": "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    "found": false
+  },
+  {
+    "input": "....//....//etc/passwd",
+    "found": false
+  },
+  {
+    "input": "folder//file.txt",
+    "found": false
+  },
+  {
+    "input": "folder/%2e%2e/file.txt",
+    "found": false
+  },
+  {
+    "input": "semi%3Bcolon.txt",
+    "found": false
+  },
+  {
+    "input": "with%20space.txt",
+    "found": true,
+    "rel": "with space.txt"
+  },
+  {
+    "input": "unicode_%C3%A9.txt",
+    "found": false
+  },
+  {
+    "input": "normal.txt%00.pdf",
+    "found": false
+  },
+  {
+    "input": ".%2e/normal.txt",
+    "found": false
+  }
+]
