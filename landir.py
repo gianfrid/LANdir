@@ -2,13 +2,14 @@
 """Landir - a simple LAN file upload server.
 
 Usage:
-    python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--secret]
+    python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure]
 
-Defaults: port 8000, uploads in ./uploads next to the script.
+Defaults: port 8000, uploads in ./uploads next to the script, secret mode ON.
 At startup the server prints the address to open from any device on the
 same network (e.g. an Android phone), rendered as a scannable QR code.
-With --secret the pages live under a random unguessable URL path; the QR
-code encodes that full path, and requests to any other path get a 404.
+By default the pages live under a random unguessable URL path; the QR code
+encodes that full path, and requests to any other path get a 404.
+Pass --insecure (-i) to serve on plain /, /upload, ... URLs instead.
 If the requested port is occupied, a random high port (32768-60999) is used.
 """
 
@@ -28,15 +29,16 @@ from urllib.parse import unquote
 def _parse_args():
     parser = argparse.ArgumentParser(
         description="LAN file upload server",
-        usage="%(prog)s [--port PORT] [--dir UPLOADS_DIR] [--secret]")
+        usage="%(prog)s [--port PORT] [--dir UPLOADS_DIR] [--insecure]")
     parser.add_argument("--port", type=int, default=8000,
                         help="port to listen on (default: 8000; falls back to random high port if occupied)")
     parser.add_argument("--dir", metavar="UPLOADS_DIR", default="uploads",
                         help="directory where uploaded files are stored "
                              "(default: ./uploads)")
-    parser.add_argument("--secret", action="store_true",
-                        help="serve under a random URL path (generated per "
-                             "run); included in the printed QR code")
+    parser.add_argument("--insecure", "-i", action="store_true",
+                        help="serve on plain /, /upload, ... URLs with no "
+                             "token (default is secret mode with a random "
+                             "URL path, included in the printed QR code)")
     return parser.parse_args()
 
 
@@ -74,7 +76,7 @@ def _find_available_port(start_port):
 
 PORT = _find_available_port(ARGS.port)
 # token_urlsafe() is URL-path-safe and ~128 bits of entropy
-SECRET_TOKEN = secrets.token_urlsafe(16) if ARGS.secret else None
+SECRET_TOKEN = None if ARGS.insecure else secrets.token_urlsafe(16)
 PAGE_PATH = f"/{SECRET_TOKEN}/" if SECRET_TOKEN else "/"
 UPLOAD_PATH = f"/{SECRET_TOKEN}/upload" if SECRET_TOKEN else "/upload"
 FILES_PATH = f"{PAGE_PATH}files"          # JSON listing of the uploads dir

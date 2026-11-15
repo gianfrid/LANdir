@@ -2,7 +2,7 @@
 
 A single-file, zero-dependency Python HTTP server that lets any device on the LAN (e.g. an Android phone) upload files through a web page. Files land in a local uploads directory.
 
-> **Warning: LAN-only tool.** The server has no authentication by default (use `--secret`) and no upload size limit. Never expose it to the internet — bind it to your local network only.
+> **Warning: LAN-only tool.** Secret mode is on by default (random token URL); pass `--insecure` only on a trusted LAN. There is no upload size limit. Never expose it to the internet — bind it to your local network only.
 
 ## Project objectives
 
@@ -18,13 +18,13 @@ A single-file, zero-dependency Python HTTP server that lets any device on the LA
 ## Running
 
 ```bash
-python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--secret]
-# defaults: port 8000, uploads in ./uploads
+python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure]
+# defaults: port 8000, uploads in ./uploads, secret mode ON
 ```
 
 At startup the server prints the URL to open, rendered as a scannable QR code (ANSI half-blocks). If the requested port is occupied, the server automatically falls back to a random available high port (32768-60999).
 
-With `--secret` the page and upload endpoint move under a fresh random token path (`/<token>/`, `/<token>/upload`) and every other path returns 404; the QR code encodes the full secret URL.
+Secret mode is the default: the page and upload endpoint live under a fresh random token path (`/<token>/`, `/<token>/upload`) and every other path returns 404; the QR code encodes the full secret URL. Pass `--insecure` (`-i`) to serve on plain `/`, `/upload`, ... URLs instead.
 
 Python 3.7+ standard library only. No packaging, no install step, no config files. Do not introduce dependencies without an explicit request.
 

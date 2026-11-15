@@ -10,7 +10,7 @@ Covers:
   syndromes verified with independently implemented GF(256) arithmetic,
   byte-mode round trip), plus structural and terminal-rendering checks
 - safe_name: sanitizing, traversal rejection, collision handling
-- the HTTP server: plain mode, --secret token routing, upload handling
+- the HTTP server: secret (default) and --insecure token routing, upload handling
 - a startup smoke test (renders a QR for the launch URL)
 """
 
@@ -34,7 +34,7 @@ SERVER = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 def load_server(argv_extra=()):
     """Load a fresh module instance (it parses sys.argv at import time)."""
-    name = "fds_" + ("secret" if "--secret" in argv_extra else "plain")
+    name = "fds_" + ("plain" if "--insecure" in argv_extra else "secret")
     old_argv = sys.argv
     sys.argv = ["landir.py", *argv_extra]
     try:
@@ -424,7 +424,7 @@ class ServerTestBase(unittest.TestCase):
 
 
 class PlainServerTests(ServerTestBase):
-    secret = ()
+    secret = ("--insecure",)
 
     def test_get_index(self):
         for path in ("/", "/index.html"):
@@ -618,10 +618,10 @@ class PlainServerTests(ServerTestBase):
 
 
 class SecretServerTests(ServerTestBase):
-    secret = ("--secret",)
+    secret = ()  # secret mode is the default
 
     def test_token_shape(self):
-        self.fds.SECRET_TOKEN  # must exist in --secret mode
+        self.fds.SECRET_TOKEN  # must exist by default (secret mode)
         self.assertRegex(self.fds.SECRET_TOKEN, r"^[A-Za-z0-9_-]{22}$")
         self.assertEqual(self.fds.PAGE_PATH, f"/{self.fds.SECRET_TOKEN}/")
         self.assertEqual(self.fds.UPLOAD_PATH,
@@ -689,7 +689,7 @@ class StartupSmokeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as updir:
             proc = subprocess.Popen(
                 [sys.executable, SERVER, "--port", str(port),
-                 "--dir", updir, "--secret"],
+                 "--dir", updir],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             try:
                 deadline = time.time() + 10

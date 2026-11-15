@@ -9,7 +9,7 @@ The server accepts untrusted uploads on the network. Any change must preserve:
 3. **The served HTML is a static constant**. Do not reflect request data into it.
 4. **Names that resolve to existing files get a timestamp suffix instead of overwriting**.
 
-Known accepted limitations (do not "fix" silently, but flag in review): no authentication unless `--secret` is used (which gates the page and upload endpoint behind a per-run 128-bit token), no upload size limit, listens on all interfaces. LAN-only by design; it must never be exposed to the internet.
+Known accepted limitations (do not "fix" silently, but flag in review): secret mode (a per-run 128-bit token gating the page and upload endpoint) is ON by default and only disabled with `--insecure`; there is no upload size limit; the server listens on all interfaces. LAN-only by design; it must never be exposed to the internet.
 
 ## Testing
 
@@ -20,7 +20,7 @@ python3 -m unittest discover -s tests   # Python implementation
 cargo test                               # Rust implementation
 ```
 
-Both suites cover the QR encoder, `safe_name` and `download_lookup`, and the HTTP endpoints (upload, JSON listing, downloads, traversal rejection) in both plain and `--secret` modes. The Python QR tests use a spec-based decoder (format-info BCH check, RS syndromes via independent GF(256) math, byte-mode round trip); the Rust endpoint tests drive the axum router in-process via `tower::oneshot`, no sockets needed.
+Both suites cover the QR encoder, `safe_name` and `download_lookup`, and the HTTP endpoints (upload, JSON listing, downloads, traversal rejection) in both secret (default) and `--insecure` modes. The Python QR tests use a spec-based decoder (format-info BCH check, RS syndromes via independent GF(256) math, byte-mode round trip); the Rust endpoint tests drive the axum router in-process via `tower::oneshot`, no sockets needed.
 
 ### Manual Verification
 
@@ -31,8 +31,9 @@ python3 landir.py --port 8000 --dir /tmp/test-uploads &
 curl -s -F "file=@somefile" http://localhost:8000/upload   # expect: OK
 curl -s -F 'file=@x;filename=../../pwn' http://localhost:8000/upload  # must land inside /tmp/test-uploads as "pwn"
 
-# with --secret (grab the token from the startup output):
-curl -s -F "file=@somefile" http://localhost:8000/upload   # expect: 404
+# secret mode is the default (grab the token from the startup output);
+# with --insecure (-i) the plain URLs are served instead:
+curl -s -F "file=@somefile" http://localhost:8000/upload   # expect: 404 (secret default)
 curl -s -F "file=@somefile" http://localhost:8000/<token>/upload   # expect: OK
 ```
 

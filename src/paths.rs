@@ -1,4 +1,4 @@
-//! Route path shapes, plain and --secret variants.
+//! Route path shapes, secret (default) and --insecure variants.
 
 #[derive(Clone, Debug)]
 pub struct Paths {
@@ -29,7 +29,7 @@ impl Paths {
         }
     }
 
-    /// Bare token path (no trailing slash); gets a 302 to the page in --secret mode.
+    /// Bare token path (no trailing slash); gets a 302 to the page in secret mode.
     pub fn bare_token(token: &str) -> String {
         format!("/{token}")
     }

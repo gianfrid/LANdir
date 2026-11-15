@@ -1,11 +1,12 @@
 //! Landir - a simple LAN file upload server (Rust implementation).
 //!
 //! Usage:
-//!     landir [--port PORT] [--dir UPLOADS_DIR] [--secret]
+//!     landir [--port PORT] [--dir UPLOADS_DIR] [--insecure]
 //!
-//! Defaults: port 8000, uploads in ./uploads. Prints the URL to open from any
-//! device on the same network, rendered as a scannable QR code. With --secret
-//! the pages live under a random unguessable URL path; everything else 404s.
+//! Defaults: port 8000, uploads in ./uploads, secret mode ON. Prints the URL
+//! to open from any device on the same network, rendered as a scannable QR
+//! code. By default the pages live under a random unguessable URL path;
+//! everything else 404s. Pass --insecure (-i) for plain /, /upload, ... URLs.
 //! If the requested port is occupied, a random high port (32768-60999) is used.
 
 mod listing;
@@ -31,9 +32,10 @@ struct Cli {
     /// Directory where uploaded files are stored
     #[arg(long, default_value = "uploads")]
     dir: PathBuf,
-    /// Serve under a random URL path (generated per run); included in the QR code
-    #[arg(long)]
-    secret: bool,
+    /// Serve on plain /, /upload, ... URLs with no token (default is secret
+    /// mode with a random URL path, included in the QR code)
+    #[arg(long, short = 'i')]
+    insecure: bool,
 }
 
 fn urandom(n: usize) -> Vec<u8> {
@@ -118,7 +120,11 @@ async fn main() {
     let port = listener.local_addr().expect("local addr").port();
 
     // 16 random bytes -> 22-char URL-safe token (~128 bits of entropy)
-    let token = cli.secret.then(|| base64url(&urandom(16)));
+    let token = if cli.insecure {
+        None
+    } else {
+        Some(base64url(&urandom(16)))
+    };
     let paths = paths::Paths::new(token.as_deref());
 
     let url = format!("http://{}:{}{}", lan_ip(), port, paths.page);

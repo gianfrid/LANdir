@@ -143,10 +143,11 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         let real = std::fs::canonicalize(&dir).unwrap();
-        let token = if tag == "secret" {
-            Some("testtoken123".to_string())
-        } else {
+        // secret mode is the default; a "plain*" tag means --insecure
+        let token = if tag.starts_with("plain") {
             None
+        } else {
+            Some("testtoken123".to_string())
         };
         let paths = Paths::new(token.as_deref());
         (
@@ -209,7 +210,7 @@ mod tests {
 
     #[tokio::test]
     async fn upload_list_download_roundtrip() {
-        let (state, dir) = test_state("roundtrip");
+        let (state, dir) = test_state("plain-roundtrip");
         let app = router(state);
         let resp = app
             .clone()
@@ -239,7 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn upload_traversal_lands_inside() {
-        let (state, dir) = test_state("trav");
+        let (state, dir) = test_state("plain-trav");
         let resp = router(state)
             .oneshot(post_upload("/upload", "BB", "../../pwn", b"x"))
             .await
@@ -251,7 +252,7 @@ mod tests {
 
     #[tokio::test]
     async fn download_rejects_traversal_and_hidden() {
-        let (state, _d) = test_state("dl");
+        let (state, _d) = test_state("plain-dl");
         let app = router(state);
         for uri in ["/fl/..%2f..%2fetc%2fpasswd", "/fl/.bashrc", "/fl/nope.txt"] {
             let resp = app
@@ -265,7 +266,7 @@ mod tests {
 
     #[tokio::test]
     async fn ls_lists_subdirectory() {
-        let (state, dir) = test_state("ls");
+        let (state, dir) = test_state("plain-ls");
         std::fs::create_dir(dir.join("sub")).unwrap();
         std::fs::write(dir.join("sub").join("inner.txt"), b"x").unwrap();
         let app = router(state);

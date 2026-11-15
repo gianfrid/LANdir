@@ -18,12 +18,12 @@ For complete project context, agents should read all three files. The key points
 - Python implementation: single-file, zero-dependency (`landir.py`), the reference
 - Rust implementation: Cargo project (`src/`), distributed as a distroless container image
 - Default: port 8000, uploads in `./uploads/`
-- Use `--secret` for token-gated access
+- Secret mode (random token URL) is the default; `--insecure` (`-i`) opts out
 
 ### From ARCHITECTURE.md  
 - Python: `http.server.ThreadingHTTPServer` with custom request handler
 - Rust: axum/tokio router (`src/server.rs`), testable without sockets via `tower::oneshot`
-- Endpoints (both): `/`, `/upload`, `/files`, `/ls/<path>`, `/fl/<name>` (all under `/<token>/` with `--secret`)
+- Endpoints (both): `/`, `/upload`, `/files`, `/ls/<path>`, `/fl/<name>` (all under `/<token>/` by default; plain paths with `--insecure`)
 - QR code: byte mode, EC level M, versions 1-6, ANSI half-block rendering
 - CLI-only configuration (argparse / clap)
 

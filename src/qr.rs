@@ -2,7 +2,7 @@
 //! (byte mode, EC level M), render as ANSI half-blocks on a white background.
 //!
 //! Versions are capped at 6 (106 bytes), matching the Python implementation;
-//! longer URLs (e.g. --secret with an IPv6 host) print "no QR code" instead.
+//! longer URLs (e.g. secret mode with an IPv6 host) print "no QR code" instead.
 
 use qrcode::{Color, EcLevel, QrCode};
 
