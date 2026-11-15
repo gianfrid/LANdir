@@ -30,7 +30,9 @@ Python 3.7+ standard library only. No packaging, no install step, no config file
 
 ## Running in a container
 
-A `Containerfile` (podman/docker compatible) is included. Base image: `python:3.12-alpine` (~51 MB).
+The default `Containerfile` (podman/docker compatible) builds the **Rust**
+implementation as a distroless static image (~4.5 MB; static binary ~1.3 MB,
+no shell/libc/package manager, runs as UID 65532):
 
 ```bash
 # build
@@ -38,13 +40,12 @@ podman build -f Containerfile -t landir .
 # docker build -f Containerfile -t landir .   # also works
 
 # run (-it attaches a TTY so Ctrl+C stops the server; uploads persist to
-# ./uploads on the host; :U fixes volume ownership)
-podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads:U landir
-# docker run --rm -it -p 8000:8000 -v ./uploads:/app/uploads landir   # also works
+# ./uploads on the host)
+podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads landir
 # open http://<host-ip>:8000/
 ```
 
-## Rust build (distroless container)
+## Rust build (local)
 
 The Rust implementation (`src/`, Cargo project) is the same server — same
 flags, same endpoints, same security rules — built on axum/tokio. Unlike the
@@ -56,19 +57,6 @@ cargo build --release   # native binary
 cargo test              # unit + in-process endpoint tests (no sockets)
 # static musl binary for distroless:
 cargo build --release --target x86_64-unknown-linux-musl
-```
-
-`Containerfile.rust` builds a distroless static image (~4 MB vs ~51 MB for
-the Python one; the static binary is ~1.3 MB):
-
-```bash
-podman build -f Containerfile.rust -t landir-rust .
-# docker build -f Containerfile.rust -t landir-rust .   # also works
-
-# run (-it attaches a TTY so Ctrl+C stops the server; runs as UID 65532;
-# uploads persist to ./uploads on the host)
-podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads landir-rust
-# open http://<host-ip>:8000/
 ```
 
 ## See Also
