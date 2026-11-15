@@ -23,7 +23,8 @@ RUN case "$TARGETARCH" in \
 
 # Runtime stage: distroless static = no shell, no package manager, no libc (~2 MB).
 # Runs as the unprivileged nonroot UID 65532 (same user as the -nonroot variant).
-FROM gcr.io/distroless/static-debian13:latest
+# Pinned by digest (multi-arch index). Update with: scripts/update-distroless-digest.sh
+FROM gcr.io/distroless/static-debian13@sha256:1a64f46364620465ef9e9a8f5413757dfdf22695e050bbfd7303eeaf17a59383
 COPY --from=build --chown=65532:65532 /out/landir /app/landir
 COPY --from=build --chown=65532:65532 /out/uploads /app/uploads
 WORKDIR /app

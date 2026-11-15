@@ -65,8 +65,9 @@ cargo build --release --target x86_64-unknown-linux-musl
   dependency change with `cargo sbom > SBOM.spdx.json`, requires `cargo install cargo-sbom`)
 - `cargo audit` — vulnerability scan of `Cargo.lock` against the RustSec
   advisory database (requires `cargo install cargo-audit`); currently clean
-- The container base is `gcr.io/distroless/static-debian13` (pinned `:latest`
-  tag of the current Debian stable)
+- The container base is `gcr.io/distroless/static-debian13` pinned by
+  **digest** (multi-arch index) in the `Containerfile`; refresh it with
+  `./scripts/update-distroless-digest.sh`
 
 ## See Also
 
