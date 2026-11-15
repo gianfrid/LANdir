@@ -1,0 +1,27 @@
+[package]
+name = "landir"
+version = "0.1.0"
+edition = "2021"
+description = "LAN file upload server (Rust implementation, distributed as a container image)"
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "multipart"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "fs"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tower-http = { version = "0.6", features = ["trace"] }
+qrcode = "0.14"
+clap = { version = "4", features = ["derive"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+percent-encoding = "2"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+# The binary ships inside a distroless image; size is a first-class requirement.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
