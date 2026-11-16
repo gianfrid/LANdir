@@ -3,6 +3,10 @@
 # login-walled). alpha/beta/rc tags become prereleases; anything else is a
 # full release.
 #
+# Tag builds are signed with the release key (secrets ANDROID_KEYSTORE_*);
+# a missing secret fails the build rather than silently publishing a
+# debug-signed APK.
+#
 # The build steps mirror .github/workflows/apk.yml on purpose: extracting a
 # reusable workflow for five steps is not worth the indirection. If the
 # build changes, change it in both places.
@@ -39,9 +43,28 @@ jobs:
         working-directory: app
         run: flutter pub get
 
-      # Same build as scripts/build-apk.sh. Debug-signed — fine for the
-      # alpha; real signing keys are a production-readiness step.
+      # Fail before building if any signing secret is missing: a tag build
+      # must never silently fall back to the debug key.
+      - name: Check signing secrets
+        run: |
+          for s in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!s:-}" ]; then echo "missing secret: $s" >&2; exit 1; fi
+          done
+
+      - name: Decode release keystore
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release-key.jks
+          echo "ANDROID_KEYSTORE_FILE=/tmp/release-key.jks" >> "$GITHUB_ENV"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      # Same build as scripts/build-apk.sh, but signed with the release key
+      # (build.gradle.kts reads ANDROID_KEYSTORE_FILE et al.).
       - name: Build APK (arm64)
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         working-directory: app
         run: flutter build apk --release --split-per-abi --target-platform=android-arm64
 
