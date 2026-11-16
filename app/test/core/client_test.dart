@@ -87,7 +87,76 @@ void main() {
 
   test('downloadFile on nonexistent file throws', () async {
     final client = LandirClient('http://127.0.0.1:$port/');
-    expect(() => client.downloadFile('nope.txt'), throwsA(isA<HttpException>()));
+    // Await each assertion: the fire-and-forget form raced with close()
+    // and asserted on an aborted connection, not the actual 404.
+    await expectLater(
+        client.downloadFile('nope.txt'), throwsA(isA<HttpException>()));
+    await expectLater(client.downloadFile('nope.txt'),
+        throwsA(isNot(isA<ServerGoneException>())));
+    client.close();
+  });
+
+  test('listDir on a stale token path throws ServerGoneException', () async {
+    // Secret-mode server: any path under the wrong token is a 404, which is
+    // what a client sees when the server restarted with a new token.
+    final secretDir = Directory.systemTemp.createTempSync('landir_secret_');
+    final secret = LandirServer(
+      ServerConfig(
+        port: 0,
+        uploadDir: secretDir.path,
+        secretToken: 'freshtoken',
+      ),
+      DirectoryFileSink(secretDir.path),
+    );
+    await secret.start();
+    addTearDown(() async {
+      await secret.stop();
+      secretDir.deleteSync(recursive: true);
+    });
+
+    final stale = LandirClient('http://127.0.0.1:${secret.boundPort}/oldtoken/');
+    await expectLater(
+        stale.listDir(''), throwsA(isA<ServerGoneException>()));
+    stale.close();
+  });
+
+  test('uploadFile to a stale token path returns false, not server-gone',
+      () async {
+    // A stale upload endpoint also 404s, but uploads report failure via
+    // their bool return; they must never raise ServerGoneException.
+    final secretDir = Directory.systemTemp.createTempSync('landir_secret_');
+    final secret = LandirServer(
+      ServerConfig(
+        port: 0,
+        uploadDir: secretDir.path,
+        secretToken: 'freshtoken',
+      ),
+      DirectoryFileSink(secretDir.path),
+    );
+    await secret.start();
+    addTearDown(() async {
+      await secret.stop();
+      secretDir.deleteSync(recursive: true);
+    });
+
+    final stale = LandirClient('http://127.0.0.1:${secret.boundPort}/oldtoken/');
+    final ok = await stale.uploadFile('x.txt', Uint8List.fromList([1]));
+    expect(ok, isFalse);
+    stale.close();
+  });
+
+  test('a 404 on download is a plain HttpException, not server-gone', () async {
+    // A missing file is a 404 too, but it must not be mistaken for a dead
+    // server: only listing requests raise ServerGoneException.
+    final client = LandirClient('http://127.0.0.1:$port/');
+    await expectLater(
+      () => client.downloadFile('missing.txt'),
+      throwsA(isA<HttpException>()),
+    );
+    await expectLater(
+      () => client.downloadFile('missing.txt'),
+      throwsA(isNot(isA<ServerGoneException>())),
+    );
     client.close();
   });
 

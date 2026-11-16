@@ -37,6 +37,11 @@ class ClientState {
   final String? error;
   final String? statusMessage;
 
+  /// Base URL of a server that answered 404 and was removed from the
+  /// registry. Set once so the UI can tell the user; cleared by
+  /// [ClientController.acknowledgeRemovedServer].
+  final String? removedServerUrl;
+
   const ClientState({
     this.servers = const [],
     this.current,
@@ -45,26 +50,47 @@ class ClientState {
     this.loading = false,
     this.error,
     this.statusMessage,
+    this.removedServerUrl,
   });
 
+  /// Null conventions differ by field, matching how each is used:
+  /// - `error`, `statusMessage`, `removedServerUrl` are transient messages:
+  ///   they are always reset unless a non-null value is passed.
+  /// - `current` cannot be reset by passing null (that means "keep"), so
+  ///   [clearCurrent] exists; callers clearing `current` reset
+  ///   `currentPath`/`files` explicitly.
   ClientState copyWith({
     List<SavedServer>? servers,
     SavedServer? current,
+    bool clearCurrent = false,
     String? currentPath,
     List<RemoteFile>? files,
     bool? loading,
     String? error,
     String? statusMessage,
+    String? removedServerUrl,
   }) =>
       ClientState(
         servers: servers ?? this.servers,
-        current: current ?? this.current,
+        current: clearCurrent ? null : (current ?? this.current),
         currentPath: currentPath ?? this.currentPath,
         files: files ?? this.files,
         loading: loading ?? this.loading,
         error: error,
         statusMessage: statusMessage,
+        removedServerUrl: removedServerUrl,
       );
+}
+
+/// True when the file browser should leave its route: the server it was
+/// browsing was deselected (deleted manually, or dropped after a 404).
+///
+/// Keyed on the `current` transition rather than the one-shot
+/// [ClientState.removedServerUrl] flag, so it cannot be affected by the
+/// order in which listeners are notified (the client view acknowledges the
+/// flag, which clears it).
+bool shouldLeaveBrowser(ClientState? prev, ClientState next) {
+  return prev?.current != null && next.current == null;
 }
 
 @riverpod
@@ -115,10 +141,7 @@ class ClientController extends _$ClientController {
   }
 
   void removeServer(String baseUrl) {
-    final servers = state.servers.where((s) => s.baseUrl != baseUrl).toList();
-    final current = state.current?.baseUrl == baseUrl ? null : state.current;
-    state = state.copyWith(servers: servers, current: current);
-    _persistServers(servers);
+    _dropServer(baseUrl);
   }
 
   /// Select a server and fetch its root listing.
@@ -130,6 +153,8 @@ class ClientController extends _$ClientController {
     try {
       final files = await _client!.listDir('');
       state = state.copyWith(files: files, loading: false);
+    } on ServerGoneException {
+      _forgetServer(server);
     } catch (e) {
       state = state.copyWith(
           loading: false, error: 'Cannot reach server: $e');
@@ -145,9 +170,47 @@ class ClientController extends _$ClientController {
     try {
       final files = await client.listDir(state.currentPath);
       state = state.copyWith(files: files, loading: false);
+    } on ServerGoneException {
+      _forgetServer(current);
     } catch (e) {
       state = state.copyWith(loading: false, error: 'Refresh failed: $e');
     }
+  }
+
+  /// The server answered 404: it no longer exists (stopped, restarted with a
+  /// new token, or moved). Drop it from the registry and deselect it.
+  void _forgetServer(SavedServer server) {
+    _client?.close();
+    _client = null;
+    _dropServer(
+      server.baseUrl,
+      error: 'Server ${server.name} no longer exists (404) — removed from '
+          'your server list.',
+      removedUrl: server.baseUrl,
+    );
+  }
+
+  /// Remove [baseUrl] from the registry, deselect it if it is current, and
+  /// persist. [error]/[removedUrl] are set only when the server was dropped
+  /// because it answered 404 (see [_forgetServer]).
+  void _dropServer(String baseUrl, {String? error, String? removedUrl}) {
+    final servers = state.servers.where((s) => s.baseUrl != baseUrl).toList();
+    final wasCurrent = state.current?.baseUrl == baseUrl;
+    state = state.copyWith(
+      servers: servers,
+      clearCurrent: wasCurrent,
+      currentPath: wasCurrent ? '' : state.currentPath,
+      files: wasCurrent ? const [] : state.files,
+      loading: false,
+      error: error,
+      removedServerUrl: removedUrl,
+    );
+    _persistServers(servers);
+  }
+
+  /// Clear the "server removed" flag once the UI has shown it.
+  void acknowledgeRemovedServer() {
+    state = state.copyWith(removedServerUrl: null);
   }
 
   /// Navigate into a subdirectory.

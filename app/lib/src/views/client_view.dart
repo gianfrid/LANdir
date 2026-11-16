@@ -3,10 +3,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-
 import '../providers/client_provider.dart';
 import 'file_browser_view.dart';
+import 'qr_scan_view.dart';
 
 class ClientView extends ConsumerStatefulWidget {
   const ClientView({super.key});
@@ -29,6 +28,17 @@ class _ClientViewState extends ConsumerState<ClientView> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final state = ref.watch(clientControllerProvider);
+
+    // Surface a server that was dropped because it answered 404.
+    ref.listen(clientControllerProvider, (prev, next) {
+      final url = next.removedServerUrl;
+      if (url == null || url == prev?.removedServerUrl) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(SnackBar(
+        content: Text('Server $url no longer exists (404). It was removed.'),
+      ));
+      ref.read(clientControllerProvider.notifier).acknowledgeRemovedServer();
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -89,17 +99,9 @@ class _ClientViewState extends ConsumerState<ClientView> {
   }
 
   Future<void> _scanQr(BuildContext context, WidgetRef ref) async {
-    final code = await Navigator.of(context).push<String>(MaterialPageRoute(
-      builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('Scan server QR')),
-        body: MobileScanner(
-          onDetect: (capture) {
-            final raw = capture.barcodes.first.rawValue;
-            if (raw != null) Navigator.of(context).pop(raw);
-          },
-        ),
-      ),
-    ));
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScanView()),
+    );
     if (code != null && context.mounted) {
       ref.read(clientControllerProvider.notifier).addServer(code);
     }

@@ -29,6 +29,17 @@ class RemoteFile {
       );
 }
 
+/// A directory listing answered 404: the base URL (host:port + token path)
+/// no longer maps to a Landir server. Callers treat this as "server is gone".
+///
+/// Only listing requests raise this. A 404 on a download just means the file
+/// is missing and stays a plain [HttpException].
+class ServerGoneException extends HttpException {
+  final String url;
+
+  ServerGoneException(this.url) : super('server gone (404): $url');
+}
+
 /// A Landir server the client can talk to.
 class LandirClient {
   final String baseUrl; // e.g. http://192.168.1.5:8000/abc123/
@@ -57,6 +68,10 @@ class LandirClient {
     final url = relPath.isEmpty ? filesUrl : listUrl(relPath);
     final req = await _http.getUrl(Uri.parse(url));
     final res = await req.close();
+    if (res.statusCode == 404) {
+      await res.drain();
+      throw ServerGoneException(url);
+    }
     if (res.statusCode != 200) {
       throw HttpException('listDir failed: ${res.statusCode}');
     }
@@ -85,6 +100,9 @@ class LandirClient {
   }
 
   /// Download a file. Returns the raw bytes.
+  ///
+  /// A 404 here means the file is missing, not that the server is gone, so it
+  /// raises a plain [HttpException].
   Future<Uint8List> downloadFile(String name) async {
     final req = await _http.getUrl(Uri.parse(downloadUrl(name)));
     final res = await req.close();

@@ -1,12 +1,14 @@
 // Provider-level test for client directory navigation logic.
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:landir_app/src/core/file_sink.dart';
 import 'package:landir_app/src/core/server.dart';
 import 'package:landir_app/src/providers/client_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   late String tmpDir;
@@ -68,5 +70,137 @@ void main() {
     // navigateUp at root stays at root
     await notifier.navigateUp();
     expect(container.read(clientControllerProvider).currentPath, '');
+  });
+
+  test('404 from the server removes it from the registry', () async {
+    SharedPreferences.setMockInitialValues({});
+    final sub = container.listen(clientControllerProvider, (prev, next) {});
+    addTearDown(sub.close);
+    final notifier = container.read(clientControllerProvider.notifier);
+
+    const live = SavedServer(name: 'live', baseUrl: 'http://127.0.0.1:1/');
+    // Insecure server: any token-prefixed path is a 404, which is exactly
+    // what a client sees after the server restarted with a new token.
+    final dead =
+        SavedServer(name: 'dead', baseUrl: 'http://127.0.0.1:$port/stale/');
+    notifier.addServer(live.baseUrl);
+    notifier.addServer(dead.baseUrl);
+    expect(container.read(clientControllerProvider).servers.length, 2);
+
+    // Selecting a server that 404s drops it and deselects it.
+    await notifier.selectServer(dead);
+    var state = container.read(clientControllerProvider);
+    expect(state.servers.map((s) => s.baseUrl), isNot(contains(dead.baseUrl)));
+    expect(state.servers.map((s) => s.baseUrl), contains(live.baseUrl));
+    expect(state.current, isNull);
+    expect(state.removedServerUrl, dead.baseUrl);
+    expect(state.error, contains('no longer exists'));
+
+    // The removal is persisted.
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('landir_saved_servers'), isNot(contains('stale')));
+
+    notifier.acknowledgeRemovedServer();
+    expect(container.read(clientControllerProvider).removedServerUrl, isNull);
+
+    // A 404 on refresh (server stopped mid-session) does the same.
+    await notifier.selectServer(dead);
+    expect(container.read(clientControllerProvider).current, isNull);
+  });
+
+  test('a 404 on download keeps the server registered', () async {
+    SharedPreferences.setMockInitialValues({});
+    final sub = container.listen(clientControllerProvider, (prev, next) {});
+    addTearDown(sub.close);
+    final notifier = container.read(clientControllerProvider.notifier);
+
+    final server =
+        SavedServer(name: 'live', baseUrl: 'http://127.0.0.1:$port/');
+    notifier.addServer(server.baseUrl);
+    await notifier.selectServer(server);
+    expect(container.read(clientControllerProvider).current, isNotNull);
+
+    // A missing file is a 404, but that only means the file is gone.
+    final bytes = await notifier.downloadFile('missing.txt');
+    final state = container.read(clientControllerProvider);
+    expect(bytes, isNull);
+    expect(state.error, contains('Download error'));
+    expect(state.removedServerUrl, isNull);
+    expect(state.servers.map((s) => s.baseUrl), contains(server.baseUrl));
+    expect(state.current?.baseUrl, server.baseUrl);
+
+    // The server still works afterwards.
+    await notifier.refresh();
+    expect(container.read(clientControllerProvider).current, isNotNull);
+    expect(container.read(clientControllerProvider).files.map((f) => f.name),
+        contains('top.txt'));
+  });
+
+  test('shouldLeaveBrowser keys on the current transition', () {
+    const s = SavedServer(name: 's', baseUrl: 'http://x/');
+    const browsing = ClientState(current: s);
+    const empty = ClientState();
+
+    // Deselected while browsing (manual delete or 404 drop) -> leave.
+    expect(shouldLeaveBrowser(browsing, empty), isTrue);
+    // Never had a server, just selected one, or nothing changed -> stay.
+    expect(shouldLeaveBrowser(null, empty), isFalse);
+    expect(shouldLeaveBrowser(empty, browsing), isFalse);
+    expect(shouldLeaveBrowser(browsing, browsing), isFalse);
+    // The removed-server flag alone must not drive the pop: it is one-shot
+    // and another listener (the client view) may acknowledge it first.
+    const flagged = ClientState(removedServerUrl: 'http://x/');
+    expect(shouldLeaveBrowser(flagged, flagged), isFalse);
+  });
+
+  test('a successful upload keeps the server registered', () async {
+    SharedPreferences.setMockInitialValues({});
+    final sub = container.listen(clientControllerProvider, (prev, next) {});
+    addTearDown(sub.close);
+    final notifier = container.read(clientControllerProvider.notifier);
+
+    final server =
+        SavedServer(name: 'live', baseUrl: 'http://127.0.0.1:$port/');
+    notifier.addServer(server.baseUrl);
+    await notifier.selectServer(server);
+
+    final ok = await notifier.uploadFile(
+        'new.txt', Uint8List.fromList([104, 105]));
+    expect(ok, isTrue);
+    final state = container.read(clientControllerProvider);
+    expect(state.removedServerUrl, isNull);
+    expect(state.servers.map((s) => s.baseUrl), contains(server.baseUrl));
+    expect(state.files.map((f) => f.name), contains('new.txt'));
+  });
+
+  test('a host that dies mid-session is kept on transient failures',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final sub = container.listen(clientControllerProvider, (prev, next) {});
+    addTearDown(sub.close);
+    final notifier = container.read(clientControllerProvider.notifier);
+
+    final entry =
+        SavedServer(name: 'live', baseUrl: 'http://127.0.0.1:$port/');
+    notifier.addServer(entry.baseUrl);
+    await notifier.selectServer(entry);
+
+    // The host dies mid-session: uploads and refreshes now fail with a
+    // connection error, which must not be mistaken for a 404 (gone).
+    await server.stop();
+    final ok = await notifier.uploadFile(
+        'new.txt', Uint8List.fromList([104, 105]));
+    expect(ok, isFalse);
+    var state = container.read(clientControllerProvider);
+    expect(state.error, contains('Upload error'));
+    expect(state.removedServerUrl, isNull);
+    expect(state.servers.map((s) => s.baseUrl), contains(entry.baseUrl));
+    expect(state.current?.baseUrl, entry.baseUrl);
+
+    await notifier.refresh();
+    state = container.read(clientControllerProvider);
+    expect(state.error, contains('Refresh failed'));
+    expect(state.removedServerUrl, isNull);
+    expect(state.servers.map((s) => s.baseUrl), contains(entry.baseUrl));
   });
 }
