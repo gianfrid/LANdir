@@ -52,7 +52,16 @@ class DownloadsView extends ConsumerWidget {
                         ? const Icon(Icons.open_in_new)
                         : null,
                     onTap: canOpenFiles
-                        ? () => openDownloadedFile(d.name)
+                        ? () async {
+                            final ok = await openDownloadedFile(d.name);
+                            if (!ok && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('No app can open ${d.name}'),
+                                ),
+                              );
+                            }
+                          }
                         : null,
                     onLongPress: () async {
                       await forgetDownload(d.name);

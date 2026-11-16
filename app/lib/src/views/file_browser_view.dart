@@ -158,16 +158,54 @@ class FileBrowserView extends ConsumerWidget {
         .read(clientControllerProvider.notifier)
         .downloadFile(relPath);
     if (bytes != null && context.mounted) {
+      var onCollision = CollisionAction.rename;
+      if (await downloadExists(name)) {
+        if (!context.mounted) return;
+        final choice = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('$name already exists'),
+            content: const Text(
+              'Replace the existing file, or save this one with a '
+              'numbered name?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Rename'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Replace'),
+              ),
+            ],
+          ),
+        );
+        if (choice == null) return; // cancelled
+        onCollision =
+            choice ? CollisionAction.overwrite : CollisionAction.rename;
+      }
       try {
-        final where = await saveDownload(name, bytes);
-        await recordDownload(name);
+        final saved = await saveDownload(name, bytes, onCollision: onCollision);
+        await recordDownload(saved.name);
         ref.invalidate(localDownloadsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Saved $name to $where'),
+            content: Text('Saved ${saved.name} to ${saved.where}'),
             action: SnackBarAction(
               label: 'Open',
-              onPressed: () => openDownloadedFile(name),
+              onPressed: () async {
+                final ok = await openDownloadedFile(saved.name);
+                if (!ok && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('No app can open ${saved.name}')),
+                  );
+                }
+              },
             ),
           ),
         );

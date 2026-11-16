@@ -26,8 +26,9 @@ class MainActivity : FlutterActivity() {
                     "writeFile" -> {
                         val name = call.argument<String>("name")!!
                         val bytes = call.argument<ByteArray>("bytes")!!
+                        val overwrite = call.argument<Boolean>("overwrite") == true
                         try {
-                            val uri = writeToDownloads(name, bytes)
+                            val uri = writeToDownloads(name, bytes, overwrite)
                             result.success(uri)
                         } catch (e: Exception) {
                             result.error("WRITE_FAILED", e.message, null)
@@ -78,14 +79,27 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    private fun writeToDownloads(name: String, bytes: ByteArray): String {
+    private fun writeToDownloads(name: String, bytes: ByteArray, overwrite: Boolean): String {
         val resolver = applicationContext.contentResolver
+        val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        if (overwrite) {
+            // Replace the existing row in place: inserting a duplicate
+            // DISPLAY_NAME would make MediaStore auto-rename it.
+            val projection = arrayOf(MediaStore.Downloads._ID)
+            val selection = "${MediaStore.Downloads.DISPLAY_NAME} = ?"
+            resolver.query(collection, projection, selection, arrayOf(name), null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val uri = android.content.ContentUris.withAppendedId(collection, cursor.getLong(0))
+                    resolver.openOutputStream(uri, "w")!!.use { it.write(bytes) }
+                    return uri.toString()
+                }
+            }
+        }
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, name)
-            put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+            put(MediaStore.Downloads.MIME_TYPE, mimeTypeFor(name))
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
-        val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val uri = resolver.insert(collection, values)!!
         resolver.openOutputStream(uri)!!.use { it.write(bytes) }
         values.clear()
@@ -180,17 +194,28 @@ class MainActivity : FlutterActivity() {
             }
         }
         uri ?: throw Exception("file not found in Downloads: $name")
-        if (mime == null) {
-            val ext = name.substringAfterLast('.', "")
-            mime = android.webkit.MimeTypeMap.getSingleton()
-                .getMimeTypeFromExtension(ext.lowercase()) ?: "*/*"
-        }
+        // The file extension wins over the stored MIME: ACTION_VIEW handlers
+        // (e.g. the package installer for .apk) match on the intent type.
+        val ext = name.substringAfterLast('.', "").lowercase()
+        val extMime = android.webkit.MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(ext)
+        val resolvedMime = extMime ?: mime ?: "application/octet-stream"
         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mime)
+            setDataAndType(uri, resolvedMime)
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        applicationContext.startActivity(intent)
+        try {
+            applicationContext.startActivity(intent)
+        } catch (e: android.content.ActivityNotFoundException) {
+            throw Exception("no app on this device can open $name")
+        }
+    }
+
+    private fun mimeTypeFor(name: String): String {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return android.webkit.MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(ext) ?: "application/octet-stream"
     }
 
     private fun startLocalOnlyHotspot(result: MethodChannel.Result) {
