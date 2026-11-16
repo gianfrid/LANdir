@@ -6,7 +6,7 @@
 # is a fully static binary that needs no libc at all. The builder image is
 # pinned for reproducibility; Cargo.lock pins the crate versions.
 
-FROM docker.io/library/rust:1.88-alpine AS build
+FROM docker.io/library/rust:1.99-alpine AS build
 ARG TARGETARCH
 RUN apk add --no-cache musl-dev
 WORKDIR /build
