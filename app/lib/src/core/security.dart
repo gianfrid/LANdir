@@ -214,3 +214,44 @@ String? sanitizeSinkPath(String raw, String uploadDir) {
   if (!insideUploads(path, uploadDir)) return null;
   return rel;
 }
+
+/// Whether [host] from a server URL is a private, loopback, or link-local
+/// address — i.e. consistent with Landir's LAN-only design.
+///
+/// Accepts IPv4 literals (with the same private ranges [findLanAddresses]
+/// treats as LAN), IPv6 loopback/link-local (fe80::/10, ::1), and single-
+/// label or `.local` hostnames (typical for LAN hosts). Anything else —
+/// public IPs, multi-label DNS names — returns false; callers warn.
+bool isLanHost(String host) {
+  final h = host.trim().toLowerCase();
+  if (h.isEmpty) return false;
+  if (h == 'localhost') return true;
+  // IPv6 literals contain no dot, so they must be classified before the
+  // single-label hostname check below would accept any of them.
+  if (h.contains(':')) {
+    if (h == '::1') return true;
+    // fe80::/10 link-local: first group fe80-febf (1111111010xxxxxxxx).
+    final m = RegExp(r'^fe[89ab][0-9a-f]:').firstMatch(h);
+    return m != null;
+  }
+  if (h.endsWith('.local') || !h.contains('.')) return true;
+
+  // IPv4 literal?
+  final v4 = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$')
+      .firstMatch(h);
+  if (v4 != null) {
+    final octets = v4
+        .groups([1, 2, 3, 4])
+        .map((g) => int.parse(g!))
+        .toList();
+    if (octets.any((o) => o > 255)) return false;
+    final a = octets[0], b = octets[1];
+    return a == 10 ||
+        a == 127 ||
+        (a == 192 && b == 168) ||
+        (a == 172 && b >= 16 && b <= 31) ||
+        (a == 169 && b == 254); // link-local
+  }
+
+  return false;
+}

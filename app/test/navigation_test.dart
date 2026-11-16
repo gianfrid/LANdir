@@ -136,6 +136,61 @@ void main() {
         contains('top.txt'));
   });
 
+  test('a non-LAN address is held as pending until confirmed', () async {
+    SharedPreferences.setMockInitialValues({});
+    final sub = container.listen(clientControllerProvider, (prev, next) {});
+    addTearDown(sub.close);
+    final notifier = container.read(clientControllerProvider.notifier);
+
+    // A public IP (TEST-NET-3) is not added directly.
+    notifier.addServer('http://203.0.113.7:8000/');
+    var state = container.read(clientControllerProvider);
+    expect(state.pendingNonLanServer?.baseUrl, 'http://203.0.113.7:8000/');
+    expect(state.servers, isEmpty);
+
+    // Confirming adds and persists it, clearing the pending entry.
+    notifier.confirmPendingNonLanServer();
+    state = container.read(clientControllerProvider);
+    expect(state.pendingNonLanServer, isNull);
+    expect(state.servers.map((s) => s.baseUrl),
+        contains('http://203.0.113.7:8000/'));
+    // The persist write is fire-and-forget; let it land.
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('landir_saved_servers'), contains('203.0.113.7'));
+  });
+
+  test('a declined non-LAN server is discarded', () async {
+    SharedPreferences.setMockInitialValues({});
+    final sub = container.listen(clientControllerProvider, (prev, next) {});
+    addTearDown(sub.close);
+    final notifier = container.read(clientControllerProvider.notifier);
+
+    notifier.addServer('http://evil.example.com/');
+    expect(container.read(clientControllerProvider).pendingNonLanServer,
+        isNotNull);
+
+    notifier.cancelPendingNonLanServer();
+    final state = container.read(clientControllerProvider);
+    expect(state.pendingNonLanServer, isNull);
+    expect(state.servers, isEmpty);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('landir_saved_servers'), isNull);
+  });
+
+  test('a LAN address is added directly with no pending entry', () async {
+    SharedPreferences.setMockInitialValues({});
+    final sub = container.listen(clientControllerProvider, (prev, next) {});
+    addTearDown(sub.close);
+    final notifier = container.read(clientControllerProvider.notifier);
+
+    notifier.addServer('http://192.168.1.50:8000/');
+    final state = container.read(clientControllerProvider);
+    expect(state.pendingNonLanServer, isNull);
+    expect(
+        state.servers.map((s) => s.baseUrl), contains('http://192.168.1.50:8000/'));
+  });
+
   test('shouldLeaveBrowser keys on the current transition', () {
     const s = SavedServer(name: 's', baseUrl: 'http://x/');
     const browsing = ClientState(current: s);

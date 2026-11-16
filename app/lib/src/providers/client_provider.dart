@@ -8,6 +8,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/client.dart';
+import '../core/security.dart';
 
 part 'client_provider.g.dart';
 
@@ -42,6 +43,10 @@ class ClientState {
   /// [ClientController.acknowledgeRemovedServer].
   final String? removedServerUrl;
 
+  /// A server whose URL points outside the LAN (public IP or DNS name).
+  /// Held here until the user confirms adding it; null otherwise.
+  final SavedServer? pendingNonLanServer;
+
   const ClientState({
     this.servers = const [],
     this.current,
@@ -51,6 +56,7 @@ class ClientState {
     this.error,
     this.statusMessage,
     this.removedServerUrl,
+    this.pendingNonLanServer,
   });
 
   /// Null conventions differ by field, matching how each is used:
@@ -69,6 +75,8 @@ class ClientState {
     String? error,
     String? statusMessage,
     String? removedServerUrl,
+    SavedServer? pendingNonLanServer,
+    bool clearPendingNonLanServer = false,
   }) =>
       ClientState(
         servers: servers ?? this.servers,
@@ -79,6 +87,8 @@ class ClientState {
         error: error,
         statusMessage: statusMessage,
         removedServerUrl: removedServerUrl,
+        pendingNonLanServer:
+            clearPendingNonLanServer ? null : (pendingNonLanServer ?? this.pendingNonLanServer),
       );
 }
 
@@ -127,6 +137,11 @@ class ClientController extends _$ClientController {
 
   /// Add a server from a URL (typically scanned from a QR code or typed).
   /// Normalizes the URL to end with '/'.
+  ///
+  /// URLs pointing outside the LAN (public IP or DNS name) are not added
+  /// directly: they land in [ClientState.pendingNonLanServer] and the UI
+  /// must confirm them via [confirmPendingNonLanServer]. Landir is
+  /// LAN-only; a public address usually means a mistyped or malicious QR.
   void addServer(String rawUrl) {
     var url = rawUrl.trim();
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -135,8 +150,35 @@ class ClientController extends _$ClientController {
     if (!url.endsWith('/')) url += '/';
     final name = Uri.parse(url).host;
     final server = SavedServer(name: name, baseUrl: url);
-    final servers = [...state.servers.where((s) => s.baseUrl != url), server];
-    state = state.copyWith(servers: servers, error: null);
+    if (!isLanHost(name)) {
+      state = state.copyWith(pendingNonLanServer: server);
+      return;
+    }
+    _add(server);
+  }
+
+  /// Add the pending non-LAN server after the user confirmed the warning.
+  void confirmPendingNonLanServer() {
+    final server = state.pendingNonLanServer;
+    if (server == null) return;
+    _add(server);
+  }
+
+  /// Discard the pending non-LAN server (user declined).
+  void cancelPendingNonLanServer() {
+    state = state.copyWith(clearPendingNonLanServer: true);
+  }
+
+  void _add(SavedServer server) {
+    final servers = [
+      ...state.servers.where((s) => s.baseUrl != server.baseUrl),
+      server
+    ];
+    state = state.copyWith(
+      servers: servers,
+      error: null,
+      clearPendingNonLanServer: true,
+    );
     _persistServers(servers);
   }
 

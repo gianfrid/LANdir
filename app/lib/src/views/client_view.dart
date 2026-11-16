@@ -40,6 +40,17 @@ class _ClientViewState extends ConsumerState<ClientView> {
       ref.read(clientControllerProvider.notifier).acknowledgeRemovedServer();
     });
 
+    // Warn before adding a server whose address is not on the LAN: Landir
+    // is LAN-only, so a public address usually means a mistyped or
+    // malicious QR code. Uploads would send file bytes to that host.
+    ref.listen(clientControllerProvider, (prev, next) {
+      final pending = next.pendingNonLanServer;
+      if (pending == null || pending.baseUrl == prev?.pendingNonLanServer?.baseUrl) {
+        return;
+      }
+      _confirmNonLanServer(context, ref, pending);
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Client'),
@@ -104,6 +115,42 @@ class _ClientViewState extends ConsumerState<ClientView> {
     );
     if (code != null && context.mounted) {
       ref.read(clientControllerProvider.notifier).addServer(code);
+    }
+  }
+
+  Future<void> _confirmNonLanServer(
+    BuildContext context,
+    WidgetRef ref,
+    SavedServer server,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.public),
+        title: const Text('Address outside the local network'),
+        content: Text(
+          '${server.baseUrl} is not a private (LAN) address.\n\n'
+          'Landir is designed for local networks only. Adding a public '
+          'address is unusual: double-check that the QR code or URL is '
+          'what you intended — anything you upload would be sent to it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Add anyway'),
+          ),
+        ],
+      ),
+    );
+    final notifier = ref.read(clientControllerProvider.notifier);
+    if (confirmed == true) {
+      notifier.confirmPendingNonLanServer();
+    } else {
+      notifier.cancelPendingNonLanServer();
     }
   }
 
