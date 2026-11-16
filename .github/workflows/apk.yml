@@ -1,0 +1,55 @@
+# Build the Android APK on every change to the app. The artifact is
+# debug-signed (fine for sideloading; see app/android/app/build.gradle.kts)
+# and attached to the run for download.
+name: APK
+
+on:
+  push:
+    branches: [slop]
+    paths:
+      - "app/**"
+      - ".github/workflows/apk.yml"
+  pull_request:
+    branches: [slop]
+    paths:
+      - "app/**"
+      - ".github/workflows/apk.yml"
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 17+ for AGP 9 (the app targets Java 17); 21 works and is the
+      # current temurin default.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Version pinned to the one used locally (see README); cache: true
+      # caches the pub workspace.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+          cache: true
+
+      - name: Fetch packages
+        working-directory: app
+        run: flutter pub get
+
+      # Same build as scripts/build-apk.sh: release, arm64 only, split per
+      # ABI. Debug-signed — the project distributes the APK by sideloading.
+      - name: Build APK (arm64)
+        working-directory: app
+        run: flutter build apk --release --split-per-abi --target-platform=android-arm64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: landir-apk-arm64
+          path: app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if-no-files-found: error
