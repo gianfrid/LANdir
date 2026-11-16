@@ -31,6 +31,14 @@ _Avoid_: Test data, fixtures (too generic).
 
 ## Networking
 
+**Advertised URL**:
+The URL clients are told to open: printed at startup and encoded in the QR code.
+_Avoid_: Public URL, external URL (implies internet-facing, which Landir is not).
+
+**Bound port**:
+The port the process actually listens on.
+_Avoid_: Server port, local port.
+
 **Hotspot mode**:
 The scenario where the Host phone runs a WiFi hotspot (Android `LocalOnlyHotspot` or iOS Personal Hotspot) and a Client connects to it. The phone is the network gateway, so its hotspot IP (e.g. `192.168.43.1` / `172.20.10.1`) is the address encoded in the QR code.
 _Avoid_: Tethering (broader than what Landir needs).

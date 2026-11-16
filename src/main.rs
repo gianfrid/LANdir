@@ -8,6 +8,12 @@
 //! code. By default the pages live under a random unguessable URL path;
 //! everything else 404s. Pass --insecure (-i) for plain /, /upload, ... URLs.
 //! If the requested port is occupied, a random high port (32768-60999) is used.
+//!
+//! In a container the port clients reach is the *mapped* port, which the
+//! process cannot discover. Pass --url to set the advertised origin:
+//!     landir --url http://192.168.1.50:18080
+//! With --url set an occupied port is a fatal error, since the printed URL
+//! could not be made to match the mapping.
 
 mod activity;
 mod listing;
@@ -29,7 +35,8 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(about = "LAN file upload server", version)]
 struct Cli {
-    /// Port to listen on (falls back to a random high port if occupied)
+    /// Port to listen on (falls back to a random high port if occupied,
+    /// unless --url is set, in which case an occupied port is an error)
     #[arg(long, default_value_t = 8000)]
     port: i64,
     /// Directory where uploaded files are stored
@@ -39,6 +46,71 @@ struct Cli {
     /// mode with a random URL path, included in the QR code)
     #[arg(long, short = 'i')]
     insecure: bool,
+    /// Origin to advertise in the printed URL and QR code, e.g.
+    /// http://192.168.1.50:18080 (for a container port mapping). The token
+    /// path is still appended. Defaults to http://<lan-ip>:<bound-port>
+    #[arg(long, value_name = "ORIGIN")]
+    url: Option<String>,
+}
+
+/// The origin (scheme + host + port) advertised to clients, without the page
+/// path. `--url` wins; otherwise the host's LAN IP and the bound port are
+/// used, which is only correct when nothing (e.g. a port mapping) sits
+/// between the process and the client.
+fn advertised_origin(override_url: Option<&str>, port: u16) -> Result<String, String> {
+    match override_url {
+        Some(raw) => parse_origin(raw),
+        None => Ok(format!("http://{}:{}", lan_ip(), port)),
+    }
+}
+
+/// Validate a user-supplied origin: `http`/`https` scheme, a non-empty host,
+/// a numeric port in 1-65535 when present, no path, query or fragment. A
+/// malformed value must fail at startup rather than produce a QR code that
+/// scans to nonsense.
+fn parse_origin(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim().trim_end_matches('/');
+    let (scheme, rest) = trimmed
+        .split_once("://")
+        .ok_or_else(|| format!("--url must include a scheme (http:// or https://): {raw}"))?;
+    let scheme = scheme.to_ascii_lowercase();
+    if scheme != "http" && scheme != "https" {
+        return Err(format!("--url scheme must be http or https: {raw}"));
+    }
+    if rest.is_empty() || rest.contains('/') || rest.contains('?') || rest.contains('#') {
+        return Err(format!(
+            "--url must be an origin only (scheme://host[:port], no path): {raw}"
+        ));
+    }
+    if rest.chars().any(|c| c.is_whitespace()) {
+        return Err(format!("--url host must not contain whitespace: {raw}"));
+    }
+    // Split a numeric port off the last colon. Anything else containing a
+    // colon must be a bracketed IPv6 literal ([::1]), which URLs require.
+    let host = if let Some((h, p)) = rest.rsplit_once(':') {
+        if !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()) {
+            let port: u32 = p.parse().expect("checked digits");
+            if !(1..=65535).contains(&port) {
+                return Err(format!("--url port must be within 1-65535: {raw}"));
+            }
+            h
+        } else if rest.starts_with('[') && rest.ends_with(']') {
+            rest // bracketed IPv6 without a port
+        } else {
+            return Err(format!(
+                "--url port must be numeric; IPv6 addresses must be bracketed: {raw}"
+            ));
+        }
+    } else {
+        rest
+    };
+    if host.is_empty() {
+        return Err(format!("--url host must not be empty: {raw}"));
+    }
+    if host.contains(':') && !(host.starts_with('[') && host.ends_with(']')) {
+        return Err(format!("--url IPv6 addresses must be bracketed: {raw}"));
+    }
+    Ok(format!("{scheme}://{rest}"))
 }
 
 fn urandom(n: usize) -> Vec<u8> {
@@ -70,10 +142,35 @@ fn base64url(data: &[u8]) -> String {
     s
 }
 
-async fn bind_available(requested: Option<u16>) -> tokio::net::TcpListener {
+/// What to do when the requested port is busy.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OnBusy {
+    /// Move to a random high port. The printed URL follows the actual port,
+    /// so it still works.
+    Fallback,
+    /// Fail: an advertised URL (--url) pins the mapping, so a fallback would
+    /// print a URL no client could reach.
+    Fail,
+}
+
+/// Bind the requested port and return the listener, or a ready-to-print
+/// error message (only [OnBusy::Fail] errors on a busy port).
+async fn bind_available(
+    requested: Option<u16>,
+    on_busy: OnBusy,
+) -> Result<tokio::net::TcpListener, String> {
     if let Some(p) = requested {
-        if let Ok(l) = tokio::net::TcpListener::bind(("0.0.0.0", p)).await {
-            return l;
+        match tokio::net::TcpListener::bind(("0.0.0.0", p)).await {
+            Ok(l) => return Ok(l),
+            Err(e) if on_busy == OnBusy::Fail => {
+                return Err(format!(
+                    "cannot listen on port {p}: {e}\n\
+                     --url advertises a fixed address, so falling back to another \
+                     port would print a URL that does not work.\n\
+                     Free port {p}, or map a different host port and update --url."
+                ));
+            }
+            Err(_) => {}
         }
     }
     // Port is occupied; try random high ports (IANA dynamic/private range)
@@ -81,11 +178,10 @@ async fn bind_available(requested: Option<u16>) -> tokio::net::TcpListener {
         let r = urandom(2);
         let port = 32768 + u16::from_be_bytes([r[0], r[1]]) % (60999 - 32768 + 1);
         if let Ok(l) = tokio::net::TcpListener::bind(("0.0.0.0", port)).await {
-            return l;
+            return Ok(l);
         }
     }
-    eprintln!("Could not find an available port after 100 attempts");
-    exit(1)
+    Err("could not find an available port after 100 attempts".to_string())
 }
 
 fn lan_ip() -> String {
@@ -119,7 +215,14 @@ async fn main() {
     } else {
         None
     };
-    let listener = bind_available(requested).await;
+    let on_busy = if cli.url.is_some() { OnBusy::Fail } else { OnBusy::Fallback };
+    let listener = match bind_available(requested, on_busy).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("error: {e}");
+            exit(1)
+        }
+    };
     let port = listener.local_addr().expect("local addr").port();
 
     // 16 random bytes -> 22-char URL-safe token (~128 bits of entropy)
@@ -130,7 +233,16 @@ async fn main() {
     };
     let paths = paths::Paths::new(token.as_deref());
 
-    let url = format!("http://{}:{}{}", lan_ip(), port, paths.page);
+    let origin = match advertised_origin(cli.url.as_deref(), port) {
+        Ok(o) => o,
+        Err(e) => {
+            // exit 2 = usage error (clap's own code for bad arguments);
+            // exit 1 above = runtime error.
+            eprintln!("error: {e}");
+            exit(2)
+        }
+    };
+    let url = format!("{origin}{}", paths.page);
 
     let state = Arc::new(server::AppState {
         upload_dir: upload_dir.clone(),
@@ -176,3 +288,146 @@ async fn main() {
         .await
         .expect("server error");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn override_origin_replaces_host_and_port() {
+        assert_eq!(
+            advertised_origin(Some("http://192.168.1.50:18080"), 8000).unwrap(),
+            "http://192.168.1.50:18080"
+        );
+    }
+
+    #[test]
+    fn override_origin_keeps_https_and_trims_trailing_slash() {
+        assert_eq!(
+            advertised_origin(Some("https://landir.example.com/"), 8000).unwrap(),
+            "https://landir.example.com"
+        );
+    }
+
+    #[test]
+    fn override_origin_without_port_is_allowed() {
+        // https behind a reverse proxy on the default port
+        assert_eq!(
+            advertised_origin(Some("https://files.example.com"), 8000).unwrap(),
+            "https://files.example.com"
+        );
+    }
+
+    #[test]
+    fn override_origin_is_case_insensitive_for_the_scheme() {
+        assert_eq!(
+            advertised_origin(Some("HTTP://10.0.0.5:9000"), 8000).unwrap(),
+            "http://10.0.0.5:9000"
+        );
+    }
+
+    #[test]
+    fn override_origin_rejects_a_missing_scheme() {
+        let err = advertised_origin(Some("192.168.1.50:18080"), 8000).unwrap_err();
+        assert!(err.contains("scheme"), "{err}");
+    }
+
+    #[test]
+    fn override_origin_rejects_a_non_http_scheme() {
+        let err = advertised_origin(Some("ftp://192.168.1.50:18080"), 8000).unwrap_err();
+        assert!(err.contains("http"), "{err}");
+    }
+
+    #[test]
+    fn override_origin_rejects_a_path() {
+        // A path prefix would need routing changes; accepting and ignoring it
+        // would be worse than refusing it.
+        let err = advertised_origin(Some("http://192.168.1.50:18080/landir"), 8000)
+            .unwrap_err();
+        assert!(err.contains("origin only"), "{err}");
+    }
+
+    #[test]
+    fn override_origin_rejects_an_empty_host() {
+        // `http://` fails on the missing remainder; `http://:8000` is the
+        // case that actually exercises the empty-host check.
+        assert!(advertised_origin(Some("http://"), 8000).is_err());
+        let err = advertised_origin(Some("http://:8000"), 8000).unwrap_err();
+        assert!(err.contains("host must not be empty"), "{err}");
+    }
+
+    #[test]
+    fn override_origin_rejects_a_non_numeric_port() {
+        let err = advertised_origin(Some("http://host:abc"), 8000).unwrap_err();
+        assert!(err.contains("port must be numeric"), "{err}");
+    }
+
+    #[test]
+    fn override_origin_rejects_an_out_of_range_port() {
+        for bad in ["http://host:99999", "http://host:0"] {
+            let err = advertised_origin(Some(bad), 8000).unwrap_err();
+            assert!(err.contains("1-65535"), "{bad}: {err}");
+        }
+    }
+
+    #[test]
+    fn override_origin_rejects_whitespace_in_the_host() {
+        let err = advertised_origin(Some("http://a b"), 8000).unwrap_err();
+        assert!(err.contains("whitespace"), "{err}");
+    }
+
+    #[test]
+    fn override_origin_accepts_bracketed_ipv6() {
+        assert_eq!(
+            advertised_origin(Some("http://[::1]:18080"), 8000).unwrap(),
+            "http://[::1]:18080"
+        );
+        assert_eq!(
+            advertised_origin(Some("http://[::1]"), 8000).unwrap(),
+            "http://[::1]"
+        );
+    }
+
+    #[test]
+    fn override_origin_rejects_an_unbracketed_ipv6() {
+        let err = advertised_origin(Some("http://::1:8000"), 8000).unwrap_err();
+        assert!(err.contains("bracketed"), "{err}");
+    }
+
+    #[test]
+    fn without_override_the_bound_port_is_used() {
+        let origin = advertised_origin(None, 8000).unwrap();
+        assert!(origin.ends_with(":8000"), "{origin}");
+        assert!(origin.starts_with("http://"), "{origin}");
+    }
+
+    #[tokio::test]
+    async fn busy_port_fails_when_an_advertised_url_is_set() {
+        // Occupy a port, then require it: the error must name the port.
+        let held = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = held.local_addr().unwrap().port();
+        let err = bind_available(Some(port), OnBusy::Fail).await.unwrap_err();
+        assert!(err.contains(&format!("cannot listen on port {port}")), "{err}");
+    }
+
+    #[tokio::test]
+    async fn busy_port_falls_back_without_an_advertised_url() {
+        let held = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = held.local_addr().unwrap().port();
+        let listener = bind_available(Some(port), OnBusy::Fallback)
+            .await
+            .expect("fallback must find another port");
+        assert_ne!(listener.local_addr().unwrap().port(), port);
+    }
+
+    #[test]
+    fn advertised_url_appends_the_secret_path() {
+        // The token path must survive the override, or the QR would 404.
+        let origin = advertised_origin(Some("http://192.168.1.50:18080"), 8000).unwrap();
+        assert_eq!(
+            format!("{origin}/abc123/"),
+            "http://192.168.1.50:18080/abc123/"
+        );
+    }
+}
+

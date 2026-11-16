@@ -51,7 +51,7 @@ For complete project context, agents should read all three files. The key points
 ## Agent Guidelines
 
 - Always preserve the security rules listed in SPEC.md — they bind BOTH implementations
-- Keep feature parity between `landir.py` and the Rust implementation (`src/`): same CLI, endpoints, and behavior. `landir.py` is the reference — change it first with a test, then port to Rust with an equivalent test
+- Keep feature parity between `landir.py` and the Rust implementation (`src/`): same CLI, endpoints, and behavior. `landir.py` is the reference — change it first with a test, then port to Rust with an equivalent test. Documented exception: `--url` is Rust-only (it corrects the advertised URL behind a container port mapping, which never applies to the others) — see SPEC.md and `docs/adr/0002-advertised-url-override.md`; do not "restore parity" by adding it elsewhere
 - Python 3.7+ standard library only (landir.py); the Rust side uses crates (Cargo.lock pinned)
 - Run both test suites before delivering changes: `python3 -m unittest discover -s tests` and `cargo test`
 

@@ -46,6 +46,7 @@ Check the uploads directory after each case. Kill the server afterwards.
 - `landir.py` stays a single file with module-level helpers (it must run on a bare python3); the HTML/CSS/JS lives in the `PAGE` constant.
 - The Rust implementation is a Cargo project under `src/` (single-file/zero-dependency does NOT apply to it; it ships as a container image).
 - **Behavioral parity across implementations is an invariant, not the goal:** the Python, Rust, and Dart hosts must expose identical CLI flags, endpoints, and behavior, and must preserve the security rules above, so every device sees the same shared directory. `landir.py` is the reference implementation — a behavior change is made there first (with a test), then ported (with an equivalent test).
+  - **Documented exception: `--url`.** Only the Rust implementation has it. It exists to correct the advertised URL when a port mapping sits between the process and the client, which only happens for the container image (which ships the Rust binary). Do not "restore parity" by adding it to `landir.py` or the app — see `docs/adr/0002-advertised-url-override.md`.
 - Prefer small, targeted edits.
 - Comments only where behavior is non-obvious; the code is meant to be read top to bottom.
 

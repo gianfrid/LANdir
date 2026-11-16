@@ -44,7 +44,7 @@ python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure]
 # defaults: port 8000, uploads in ./uploads, secret mode ON
 ```
 
-At startup the server prints the URL to open, rendered as a scannable QR code (ANSI half-blocks). If the requested port is occupied, the server automatically falls back to a random available high port (32768-60999).
+At startup the server prints the URL to open, rendered as a scannable QR code (ANSI half-blocks). If the requested port is occupied, the server automatically falls back to a random available high port (32768-60999), except in the container image with `--url` set (see below).
 
 On an interactive terminal the server shows a full-screen view instead: the QR code and the list of currently-online client IPs stay visible on top (`q` toggles the QR panel), and a scrollable event log below shows who uploaded or downloaded what (arrows/PgUp/PgDn scroll). File-listing polls are never logged as lines — they only keep a client visible in the online list for 10 s after its last request. When output is not a TTY it falls back to plain log lines with the same filtering. This applies to both implementations: `landir.py` uses curses (Unix only — elsewhere it falls back to plain logs), and the Rust binary uses ratatui/crossterm, so it also shows the full-screen UI when the container is run with a TTY (`podman run -it ...`) and plain logs when it is not (e.g. `podman logs`).
 
@@ -68,6 +68,26 @@ podman build -f Containerfile -t landir .
 podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads landir
 # open http://<host-ip>:8000/
 ```
+
+### Publishing on a different host port
+
+The container cannot know which host port you mapped, so always pass `--url`
+with the origin clients should use. Without it the printed URL and QR code
+advertise the port bound *inside* the container, which is unreachable:
+
+```bash
+podman run --rm -it -p 18080:8000 -v ./uploads:/app/uploads \
+  landir --url http://192.168.1.50:18080
+# QR and printed URL now say http://192.168.1.50:18080/<token>/
+```
+
+`--url` takes a full origin (`http` or `https`, host, optional port, no path);
+the secret token path is still appended. With `--url` set, an occupied listen
+port is a fatal error rather than a silent fallback to a random port, since
+the mapping is fixed and a fallback would print a URL that cannot work.
+
+> `--url` exists only in the Rust implementation (the one the container
+> ships). `landir.py` and the Flutter app are not run behind a port mapping.
 
 ## Rust build (local)
 
