@@ -53,3 +53,8 @@ jobs:
           name: landir-apk-arm64
           path: app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
+
+      # Tag builds are promoted to the Releases page by release.yml, which
+      # re-runs this job's build steps on v* tags. Kept separate because the
+      # paths filter above and tag pushes do not compose reliably (a tag on
+      # a commit that touched no app/ file would silently skip the build).
