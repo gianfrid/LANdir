@@ -1,9 +1,14 @@
 // Landir app entry point. Adaptive layout: side-by-side Host/Client on
 // wide (desktop) windows, bottom-nav tabs on narrow (phone) screens.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
+import 'src/platform/share_intent.dart';
+import 'src/providers/client_provider.dart';
 import 'src/views/client_view.dart';
 import 'src/views/downloads_view.dart';
 import 'src/views/host_view.dart';
@@ -44,15 +49,44 @@ class LandirApp extends StatelessWidget {
   }
 }
 
-class _AdaptiveHome extends StatefulWidget {
+class _AdaptiveHome extends ConsumerStatefulWidget {
   const _AdaptiveHome();
 
   @override
-  State<_AdaptiveHome> createState() => _AdaptiveHomeState();
+  ConsumerState<_AdaptiveHome> createState() => _AdaptiveHomeState();
 }
 
-class _AdaptiveHomeState extends State<_AdaptiveHome> {
+class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
   int _tab = 0;
+  StreamSubscription<List<SharedMediaFile>>? _shareSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Shares arriving while the app is running.
+    _shareSub = ReceiveSharingIntent.instance
+        .getMediaStream()
+        .listen(_handleSharedMedia);
+    // Share that launched the app from a closed state.
+    ReceiveSharingIntent.instance.getInitialMedia().then((media) {
+      ReceiveSharingIntent.instance.reset();
+      _handleSharedMedia(media);
+    });
+  }
+
+  @override
+  void dispose() {
+    _shareSub?.cancel();
+    super.dispose();
+  }
+
+  void _handleSharedMedia(List<SharedMediaFile> media) {
+    final shares = incomingSharesFromMedia(media);
+    if (shares.isEmpty) return;
+    ref.read(clientControllerProvider.notifier).receiveShares(shares);
+    // Bring the client tab forward so the user sees the upload happen.
+    setState(() => _tab = 1);
+  }
 
   @override
   Widget build(BuildContext context) {

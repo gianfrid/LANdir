@@ -2,6 +2,7 @@
 // browsing, upload, download.
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -9,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/client.dart';
 import '../core/security.dart';
+import '../core/share.dart';
 
 part 'client_provider.g.dart';
 
@@ -47,6 +49,10 @@ class ClientState {
   /// Held here until the user confirms adding it; null otherwise.
   final SavedServer? pendingNonLanServer;
 
+  /// Items received through the platform share sheet while no server was
+  /// selected. Uploaded (and the list cleared) as soon as one is.
+  final List<IncomingShare> pendingShares;
+
   const ClientState({
     this.servers = const [],
     this.current,
@@ -57,6 +63,7 @@ class ClientState {
     this.statusMessage,
     this.removedServerUrl,
     this.pendingNonLanServer,
+    this.pendingShares = const [],
   });
 
   /// Null conventions differ by field, matching how each is used:
@@ -77,6 +84,7 @@ class ClientState {
     String? removedServerUrl,
     SavedServer? pendingNonLanServer,
     bool clearPendingNonLanServer = false,
+    List<IncomingShare>? pendingShares,
   }) =>
       ClientState(
         servers: servers ?? this.servers,
@@ -89,6 +97,7 @@ class ClientState {
         removedServerUrl: removedServerUrl,
         pendingNonLanServer:
             clearPendingNonLanServer ? null : (pendingNonLanServer ?? this.pendingNonLanServer),
+        pendingShares: pendingShares ?? this.pendingShares,
       );
 }
 
@@ -197,9 +206,57 @@ class ClientController extends _$ClientController {
       state = state.copyWith(files: files, loading: false);
     } on ServerGoneException {
       _forgetServer(server);
+      return;
     } catch (e) {
       state = state.copyWith(
           loading: false, error: 'Cannot reach server: $e');
+      return;
+    }
+    // Shares that arrived while no server was selected: flush them now.
+    final pending = state.pendingShares;
+    if (pending.isNotEmpty) {
+      state = state.copyWith(pendingShares: const []);
+      await _uploadShares(pending);
+    }
+  }
+
+  /// Handle shares arriving via the platform share sheet. Uploads
+  /// immediately when a server is selected; otherwise holds them until the
+  /// user picks one (see [selectServer]).
+  Future<void> receiveShares(List<IncomingShare> shares) async {
+    if (shares.isEmpty) return;
+    if (state.current == null) {
+      state = state.copyWith(
+        pendingShares: [...state.pendingShares, ...shares],
+        statusMessage:
+            'Select a server to upload ${shares.length} shared item(s)',
+      );
+      return;
+    }
+    await _uploadShares(shares);
+  }
+
+  /// Upload a batch of shares to the current server, one by one. Per-file
+  /// errors are counted, not fatal: one unreadable share must not block the
+  /// rest of the batch.
+  Future<void> _uploadShares(List<IncomingShare> shares) async {
+    var ok = 0;
+    for (final share in shares) {
+      try {
+        final Uint8List bytes;
+        if (share.isText) {
+          bytes = Uint8List.fromList(utf8.encode(share.text!));
+        } else {
+          bytes = await File(share.filePath!).readAsBytes();
+        }
+        if (await uploadFile(share.filename, bytes)) ok++;
+      } catch (_) {
+        state = state.copyWith(loading: false);
+      }
+    }
+    if (ok < shares.length) {
+      state = state.copyWith(
+          error: 'Uploaded $ok of ${shares.length} shared item(s)');
     }
   }
 

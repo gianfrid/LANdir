@@ -6,7 +6,9 @@ plugins {
 
 android {
     namespace = "com.example.landir_app"
-    compileSdk = flutter.compileSdkVersion
+    // Pinned to 37 (not flutter.compileSdkVersion = 36): receive_sharing_intent
+    // requires it. AGP 9.1.0 recommends 36 but accepts 37.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     // Release signing via environment variables (CI: GitHub secrets
