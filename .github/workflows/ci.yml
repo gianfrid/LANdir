@@ -28,10 +28,14 @@ jobs:
           cargo audit
 
       - name: SBOM is up to date
-        # cargo-sbom output ordering is non-deterministic; compare normalized package sets
+        # cargo-sbom output ordering is non-deterministic; compare normalized
+        # package sets. The sort key must include versionInfo: the lock graph
+        # legitimately contains several versions of one crate (e.g. two
+        # windows-sys), and sort_by(.name) alone leaves those entries in
+        # cargo-sbom's arbitrary input order, producing spurious diffs.
         run: |
           cargo install cargo-sbom --locked --quiet
-          norm() { jq -S '[.packages[] | {name, versionInfo, licenseConcluded}] | sort_by(.name)'; }
+          norm() { jq -S '[.packages[] | {name, versionInfo, licenseConcluded}] | sort_by(.name, .versionInfo)'; }
           cargo sbom 2>/dev/null | norm > /tmp/sbom-new.json
           norm < SBOM.spdx.json > /tmp/sbom-old.json
           diff /tmp/sbom-old.json /tmp/sbom-new.json
