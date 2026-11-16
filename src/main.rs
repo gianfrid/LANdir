@@ -82,14 +82,25 @@ fn parse_origin(raw: &str) -> Result<String, String> {
             "--url must be an origin only (scheme://host[:port], no path): {raw}"
         ));
     }
-    if rest.chars().any(|c| c.is_whitespace()) {
-        return Err(format!("--url host must not contain whitespace: {raw}"));
+    // Reject control characters (C0, DEL, C1). The value is echoed to the
+    // terminal in plain-log mode and in error messages, where an ESC byte
+    // would be interpreted as a terminal escape (e.g. OSC-52 clipboard
+    // writes). Whitespace is a subset of this.
+    if rest
+        .chars()
+        .any(|c| c.is_control() || ('\u{80}'..='\u{9f}').contains(&c) || c.is_whitespace())
+    {
+        return Err(format!("--url host must not contain whitespace or control characters: {raw}"));
     }
     // Split a numeric port off the last colon. Anything else containing a
     // colon must be a bracketed IPv6 literal ([::1]), which URLs require.
     let host = if let Some((h, p)) = rest.rsplit_once(':') {
         if !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()) {
-            let port: u32 = p.parse().expect("checked digits");
+            // Parsed as u64 so an absurdly long digit run overflows into an
+            // error instead of a panic; u16 range is checked after.
+            let port: u64 = p
+                .parse()
+                .map_err(|_| format!("--url port must be within 1-65535: {raw}"))?;
             if !(1..=65535).contains(&port) {
                 return Err(format!("--url port must be within 1-65535: {raw}"));
             }
@@ -377,6 +388,34 @@ mod tests {
     }
 
     #[test]
+    fn override_origin_rejects_terminal_escape_sequences() {
+        // The origin is echoed to the terminal in plain-log mode and error
+        // messages; an ESC byte there would be interpreted as a terminal
+        // escape (e.g. OSC-52 clipboard writes).
+        let cases = [
+            "http://a\u{1b}]52;c;bmFsd2F5\u{7}b", // OSC-52 clipboard write
+            "http://a\u{1b}[2Jb",                 // CSI clear-screen
+            "http://a\u{7}b",                     // BEL
+            "http://a\u{9b}b",                    // C1 CSI (U+009B)
+            "http://a\u{7f}b",                    // DEL
+            "http://a\u{b}b",                     // vertical tab
+        ];
+        for bad in cases {
+            let err = advertised_origin(Some(bad), 8000).unwrap_err();
+            assert!(err.contains("control characters"), "{bad:?}: {err}");
+        }
+    }
+
+    #[test]
+    fn override_origin_rejects_an_absurdly_long_digit_port_without_panic() {
+        // Regression: 40 digits pass the is_ascii_digit check but overflow
+        // u32, which used to panic in parse().expect().
+        let huge = format!("http://host:{}", "9".repeat(40));
+        let err = advertised_origin(Some(&huge), 8000).unwrap_err();
+        assert!(err.contains("1-65535"), "{err}");
+    }
+
+    #[test]
     fn override_origin_accepts_bracketed_ipv6() {
         assert_eq!(
             advertised_origin(Some("http://[::1]:18080"), 8000).unwrap(),
@@ -430,4 +469,5 @@ mod tests {
         );
     }
 }
+
 
