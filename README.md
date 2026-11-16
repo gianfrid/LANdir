@@ -86,6 +86,26 @@ the secret token path is still appended. With `--url` set, an occupied listen
 port is a fatal error rather than a silent fallback to a random port, since
 the mapping is fixed and a fallback would print a URL that cannot work.
 
+#### HTTPS behind a reverse proxy
+
+The server itself only speaks plain HTTP. `--url https://…` is correct only
+when a TLS-terminating reverse proxy sits in front of it; without one, clients
+scanning the QR get a TLS handshake error (the server cannot answer it).
+For example, with Caddy fronting the container:
+
+```bash
+# Caddyfile: terminates TLS for clients, proxies plain HTTP to Landir
+#   landir.example.com {
+#       reverse_proxy localhost:18080
+#   }
+podman run --rm -d -p 18080:8000 -v ./uploads:/app/uploads \
+  landir --url https://landir.example.com
+```
+
+The QR then advertises `https://landir.example.com/<token>/`; clients reach
+Landir through the proxy's TLS. Note the proxy can also see all traffic —
+only front it with software you trust on a network you trust.
+
 > `--url` exists only in the Rust implementation (the one the container
 > ships). `landir.py` and the Flutter app are not run behind a port mapping.
 
