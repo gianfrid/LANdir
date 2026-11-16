@@ -1,6 +1,9 @@
 # Landir
 
-Glossary of project-specific terms. Landir is a LAN file-drop tool: a device hosts a small HTTP server that other devices on the same network use to upload files, which land in a local directory.
+Glossary of project-specific terms. Landir is a universal shared network
+directory: a device hosts a small HTTP server and other devices on the same
+network use it — from any web browser — to upload files (which land in a
+local directory) and to download them again.
 
 ## Roles
 

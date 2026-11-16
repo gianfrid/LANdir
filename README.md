@@ -1,12 +1,33 @@
 # Landir
 
-A single-file, zero-dependency Python HTTP server that lets any device on the LAN (e.g. an Android phone) upload files through a web page. Files land in a local uploads directory.
+Landir turns any device into a shared network directory. One device hosts a
+small HTTP server; every other device on the same network can then drop files
+onto it — from a plain web browser, no app install required — and download
+them again. Files land in a local directory (on phones, in the native Files
+app).
 
 > **Warning: LAN-only tool.** Secret mode is on by default (random token URL); pass `--insecure` only on a trusted LAN. There is no upload size limit. Never expose it to the internet — bind it to your local network only.
 
-## Project objectives
+## Scope
 
-- **Feature parity:** `landir.py` (Python) and `src/` (Rust) must stay behaviorally identical — same CLI flags, same endpoints, same responses, same security rules. `landir.py` is the reference implementation; any behavior change lands there first (with tests), then is ported to Rust.
+**Goal:** a universal shared directory for the local network. Any device that
+can run a Landir host becomes a drop point; any device with a web browser can
+use it.
+
+- **Client requirement is minimal: a web browser.** Uploading and downloading
+  work from any browser on the network. The Flutter app is an optional,
+  richer client (QR scanning, saved servers, file browsing) for when a plain
+  browser is not enough — a custom client, not a requirement.
+- **Hosts run everywhere:** a bare `python3` (`landir.py`), a Rust binary or
+  distroless container (`src/`), or a phone/desktop via the Flutter app
+  (`app/`). The set of supported devices and runtimes is expected to grow;
+  new hosts are added by porting the same behavior, not by redefining the
+  project.
+- **One behavior, many implementations.** The Python, Rust, and Dart hosts
+  must stay behaviorally identical — same CLI/UX, endpoints, security rules —
+  so the directory feels the same from every device. `landir.py` is the
+  reference: a behavior change lands there first (with tests), then is
+  ported. Parity is the invariant that serves the goal, not the goal itself.
 
 ## Layout
 

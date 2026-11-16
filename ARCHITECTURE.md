@@ -1,9 +1,12 @@
 # Architecture
 
-Landir has three behaviorally identical implementations. `landir.py` (Python) is
-the reference: any behavior change lands there first (with tests), then is
-ported to Rust and Dart. All three expose the same CLI/UX, endpoints, and
-security rules (see [SPEC.md](SPEC.md)).
+Landir's goal is a shared network directory usable from any device (see
+"Scope" in [README.md](README.md)). It is delivered through interchangeable
+host implementations — `landir.py` (Python, the reference), `src/` (Rust,
+containerized), and `app/` (Flutter, phone/desktop) — which must stay
+behaviorally identical: same CLI/UX, endpoints, and security rules (see
+[SPEC.md](SPEC.md)). `landir.py` is the reference: any behavior change lands
+there first (with tests), then is ported to Rust and Dart.
 
 ## Shared endpoint model (all implementations)
 
