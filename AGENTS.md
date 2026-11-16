@@ -60,4 +60,3 @@ For complete project context, agents should read all three files. The key points
 - [README.md](README.md)
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [SPEC.md](SPEC.md)
-- [TODO.md](TODO.md) — Open tasks and roadmap

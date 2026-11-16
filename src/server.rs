@@ -1,18 +1,23 @@
 //! HTTP layer. `router` is the seam: every endpoint is reachable through it,
 //! so tests exercise the whole surface with `tower::oneshot` without sockets.
 
+use std::convert::Infallible;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::{DefaultBodyLimit, Multipart, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, FromRequestParts, Multipart, Request, State};
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE};
-use axum::http::{Response, StatusCode, Uri};
-use axum::response::{Html, IntoResponse};
+use axum::http::request::Parts;
+use axum::http::{StatusCode, Uri};
+use axum::middleware::{self, Next};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use tokio_util::io::ReaderStream;
 
+use crate::activity::{emit_event, ActivityLog};
 use crate::listing;
 use crate::page::PAGE;
 use crate::paths::Paths;
@@ -23,6 +28,46 @@ pub struct AppState {
     pub upload_real: PathBuf,
     pub token: Option<String>,
     pub paths: Paths,
+    pub activity: ActivityLog,
+}
+
+/// Client IP from the connection; 0.0.0.0 when there is no ConnectInfo
+/// (in-process tests drive the router without sockets).
+pub struct ClientIp(pub IpAddr);
+
+impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
+    type Rejection = Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Infallible> {
+        Ok(parts
+            .extensions
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|c| ClientIp(c.0.ip()))
+            .unwrap_or(ClientIp(IpAddr::V4(Ipv4Addr::UNSPECIFIED))))
+    }
+}
+
+/// Every request refreshes the client's presence; failed requests are logged
+/// with the client IP. Listing polls and page loads stay silent.
+async fn track_activity(
+    State(s): State<Arc<AppState>>,
+    req: Request,
+    next: Next,
+) -> Response {
+    let (mut parts, body) = req.into_parts();
+    let ip = ClientIp::from_request_parts(&mut parts, &()).await.unwrap().0;
+    let req = Request::from_parts(parts, body);
+    s.activity.touch(ip);
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+    let resp = next.run(req).await;
+    if !resp.status().is_success() {
+        emit_event(
+            &s.activity,
+            format!("{ip} {method} {path} -> {}", resp.status().as_u16()),
+        );
+    }
+    resp
 }
 
 pub fn router(state: Arc<AppState>) -> Router {
@@ -32,7 +77,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(&format!("{}{{*rest}}", state.paths.ls_prefix), get(list_subdir))
         .route(&format!("{}{{*rest}}", state.paths.fl_prefix), get(download))
         // No upload size limit (known accepted limitation, see SPEC.md)
-        .route(&state.paths.upload, post(upload).layer(DefaultBodyLimit::disable()));
+        .route(&state.paths.upload, post(upload).layer(DefaultBodyLimit::disable()))
+        .layer(middleware::from_fn_with_state(state.clone(), track_activity));
     if let Some(token) = &state.token {
         // bare /<token> redirects (302, like the Python server) to the
         // trailing-slash page so relative URLs resolve
@@ -79,7 +125,11 @@ async fn list_subdir(State(s): State<Arc<AppState>>, uri: Uri) -> Response<Body>
     json_response(listing::entries_json(&listing::list_dir(&dir, &s.upload_real)))
 }
 
-async fn download(State(s): State<Arc<AppState>>, uri: Uri) -> Response<Body> {
+async fn download(
+    State(s): State<Arc<AppState>>,
+    ClientIp(ip): ClientIp,
+    uri: Uri,
+) -> Response<Body> {
     let raw = uri.path();
     let rel = raw.strip_prefix(&s.paths.fl_prefix).unwrap_or(raw);
     let Some(path) = security::download_lookup(rel, &s.upload_dir, &s.upload_real) else {
@@ -93,6 +143,7 @@ async fn download(State(s): State<Arc<AppState>>, uri: Uri) -> Response<Body> {
         .file_name()
         .map(|f| f.to_string_lossy().into_owned())
         .unwrap_or_default();
+    emit_event(&s.activity, format!("{ip} downloaded {fname} ({len} B)"));
     Response::builder()
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, "application/octet-stream")
@@ -102,7 +153,11 @@ async fn download(State(s): State<Arc<AppState>>, uri: Uri) -> Response<Body> {
         .unwrap()
 }
 
-async fn upload(State(s): State<Arc<AppState>>, mut multipart: Multipart) -> Response<Body> {
+async fn upload(
+    State(s): State<Arc<AppState>>,
+    ClientIp(ip): ClientIp,
+    mut multipart: Multipart,
+) -> Response<Body> {
     let mut saved = 0;
     while let Ok(Some(field)) = multipart.next_field().await {
         let Some(fname) = field.file_name().map(|f| f.to_string()) else {
@@ -113,6 +168,10 @@ async fn upload(State(s): State<Arc<AppState>>, mut multipart: Multipart) -> Res
         };
         if let Some(name) = security::safe_name(&fname, &s.upload_real) {
             if tokio::fs::write(s.upload_dir.join(&name), &data).await.is_ok() {
+                emit_event(
+                    &s.activity,
+                    format!("{ip} uploaded {name} ({} B)", data.len()),
+                );
                 saved += 1;
             }
         }
@@ -156,6 +215,7 @@ mod tests {
                 upload_real: real,
                 token,
                 paths,
+                activity: ActivityLog::new(),
             }),
             dir,
         )
@@ -282,6 +342,75 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn activity_tracks_presence_and_events() {
+        let (state, _d) = test_state("plain-act");
+        let app = router(state.clone());
+        let addr = SocketAddr::from(([127, 0, 0, 1], 40000));
+        let with_ip = |mut req: Request<Body>| {
+            req.extensions_mut().insert(ConnectInfo(addr));
+            req
+        };
+        let resp = app
+            .clone()
+            .oneshot(with_ip(post_upload("/upload", "BB", "a.txt", b"abc")))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app
+            .clone()
+            .oneshot(with_ip(
+                Request::builder().uri("/files").body(Body::empty()).unwrap(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app
+            .clone()
+            .oneshot(with_ip(
+                Request::builder().uri("/fl/a.txt").body(Body::empty()).unwrap(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app
+            .oneshot(with_ip(
+                Request::builder().uri("/fl/nope.txt").body(Body::empty()).unwrap(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        let events: Vec<String> = state
+            .activity
+            .events()
+            .iter()
+            .map(|(_, t)| t.clone())
+            .collect();
+        assert!(
+            events.iter().any(|e| e == "127.0.0.1 uploaded a.txt (3 B)"),
+            "{events:?}"
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| e == "127.0.0.1 downloaded a.txt (3 B)"),
+            "{events:?}"
+        );
+        // listing polls are not logged, but they refreshed presence
+        assert!(!events.iter().any(|e| e.contains("/files")), "{events:?}");
+        assert!(
+            events
+                .iter()
+                .any(|e| e == "127.0.0.1 GET /fl/nope.txt -> 404"),
+            "{events:?}"
+        );
+        assert_eq!(
+            state.activity.online(),
+            vec![IpAddr::from([127, 0, 0, 1])]
+        );
     }
 
     #[tokio::test]

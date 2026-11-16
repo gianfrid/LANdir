@@ -72,5 +72,4 @@ One Flutter/Dart codebase for Android, iOS, and Linux desktop (see
 
 - [README.md](README.md) — Project overview and running instructions
 - [SPEC.md](SPEC.md) — Security rules, testing, and conventions
-- [TODO.md](TODO.md) — Remaining release tasks
 - [GLOSSARY.md](GLOSSARY.md) — Project terminology

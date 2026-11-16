@@ -21,6 +21,8 @@ import secrets
 import shutil
 import sys
 import socket
+import threading
+import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
@@ -82,6 +84,72 @@ UPLOAD_PATH = f"/{SECRET_TOKEN}/upload" if SECRET_TOKEN else "/upload"
 FILES_PATH = f"{PAGE_PATH}files"          # JSON listing of the uploads dir
 FILE_DOWNLOAD_PREFIX = f"{PAGE_PATH}fl/"  # download one file by name
 FILES_LIST_PREFIX = f"{PAGE_PATH}ls/"   # list directory contents (optional path)
+
+
+# --- Client activity tracking -------------------------------------------------
+# Every request refreshes the client's presence; uploads/downloads/errors are
+# logged as events with the client IP. Listing polls are never logged as
+# lines, they only keep the client visible in the "online" list.
+
+PRESENCE_TTL = 10.0  # seconds a client stays "online" after its last request
+
+
+class ActivityLog:
+    """Thread-safe record of client presence and notable events."""
+
+    def __init__(self, ttl=PRESENCE_TTL, max_events=500):
+        self.ttl = ttl
+        self.max_events = max_events
+        self._lock = threading.Lock()
+        self._last_seen = {}  # ip -> monotonic timestamp
+        self._events = []     # (wall-clock timestamp, text)
+
+    def touch(self, ip):
+        with self._lock:
+            self._last_seen[ip] = time.monotonic()
+
+    def add_event(self, text):
+        with self._lock:
+            self._events.append((time.time(), text))
+            del self._events[:-self.max_events]
+
+    def online(self, now=None):
+        """IPs seen within the TTL, oldest-expired first pruned. [now] is a
+        monotonic timestamp, injectable for tests."""
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            for ip in [ip for ip, t in self._last_seen.items()
+                       if now - t > self.ttl]:
+                del self._last_seen[ip]
+            return sorted(self._last_seen)
+
+    def events(self):
+        with self._lock:
+            return list(self._events)
+
+
+ACTIVITY = ActivityLog()
+PLAIN_MODE = True  # False while the curses UI runs (events go to the UI pane)
+
+
+def classify_request(command, path):
+    """'upload' / 'download' for notable requests, None for quiet ones
+    (page loads, file-listing polls, redirects, errors are handled apart)."""
+    base = path.split("?", 1)[0]
+    if command == "POST" and base == UPLOAD_PATH:
+        return "upload"
+    if command == "GET" and base.startswith(FILE_DOWNLOAD_PREFIX):
+        return "download"
+    return None
+
+
+def emit_event(text):
+    """Record an event; in plain mode also print it as a log line."""
+    ACTIVITY.add_event(text)
+    if PLAIN_MODE:
+        stamp = datetime.now().strftime("%H:%M:%S")
+        sys.stderr.write("[%s] %s\n" % (stamp, text))
+        sys.stderr.flush()
 
 
 # --- Minimal QR code encoder (byte mode, EC level M, versions 1-6) ----------
@@ -739,7 +807,11 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _client_ip(self):
+        return self.client_address[0]
+
     def do_GET(self):
+        ACTIVITY.touch(self._client_ip())
         base = self.path.split("?", 1)[0]
         if SECRET_TOKEN and base == "/" + SECRET_TOKEN:
             # redirect to add the trailing slash so relative URLs resolve
@@ -835,7 +907,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body.encode("utf-8"))
             return
-        if base.startswith(FILE_DOWNLOAD_PREFIX):
+        if classify_request("GET", self.path) == "download":
             path = download_lookup(base[len(FILE_DOWNLOAD_PREFIX):])
             if path is None:
                 self.send_error(404)
@@ -849,11 +921,14 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             with open(path, "rb") as fh:
                 shutil.copyfileobj(fh, self.wfile)
+            emit_event(f"{self._client_ip()} downloaded "
+                       f"{os.path.basename(path)} ({size} B)")
             return
         self.send_error(404)
 
     def do_POST(self):
-        if self.path != UPLOAD_PATH:
+        ACTIVITY.touch(self._client_ip())
+        if classify_request("POST", self.path) != "upload":
             self.send_error(404)
             return
 
@@ -887,6 +962,8 @@ class Handler(BaseHTTPRequestHandler):
                 name = safe_name(nm.decode("utf-8", "replace"))
                 with open(os.path.join(UPLOAD_DIR, name), "wb") as fh:
                     fh.write(filedata)
+                emit_event(f"{self._client_ip()} uploaded "
+                           f"{name} ({len(filedata)} B)")
                 saved += 1
             except Exception:
                 continue
@@ -900,7 +977,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400, "No file saved")
 
     def log_message(self, fmt, *args):
-        sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
+        # Per-request lines are suppressed: listing polls are pure noise.
+        # Uploads/downloads are emitted explicitly with the client IP.
+        pass
+
+    def send_error(self, code, message=None, explain=None):
+        emit_event(f"{self._client_ip()} {self.command} "
+                   f"{self.path.split('?', 1)[0]} -> {code}")
+        super().send_error(code, message, explain)
 
 
 def lan_ip() -> str:
@@ -914,20 +998,122 @@ def lan_ip() -> str:
         s.close()
 
 
+def _curses_available():
+    try:
+        import curses  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _safe_add(win, y, x, text):
+    """addnstr that never raises on the bottom-right cell / tiny terminals."""
+    import curses
+    try:
+        win.addnstr(y, x, text, max(0, win.getmaxyx()[1] - x - 1))
+    except curses.error:
+        pass
+
+
+def _ui_loop(stdscr, url):
+    """Full-screen UI: QR + online clients on top, scrollable event log below.
+    'q' toggles the QR panel, arrows/PgUp/PgDn scroll the log, Ctrl+C quits."""
+    import curses
+    curs_set_ok = True
+    try:
+        curses.curs_set(0)
+    except curses.error:
+        curs_set_ok = False
+    stdscr.nodelay(True)
+    show_qr = True
+    scroll = 0  # how many lines the log is scrolled up from the bottom
+    # qr_terminal emits ANSI color escapes; curses would print them literally
+    ansi = re.compile(r"\x1b\[[0-9;]*m")
+    qr_lines = [ansi.sub("", l)
+                for l in qr_terminal(qr_matrix(url)).splitlines()]
+    while True:
+        key = stdscr.getch()
+        if key == ord("q"):
+            show_qr = not show_qr
+        elif key == curses.KEY_UP:
+            scroll += 1
+        elif key == curses.KEY_DOWN:
+            scroll = max(0, scroll - 1)
+        elif key == curses.KEY_PPAGE:
+            scroll += 10
+        elif key == curses.KEY_NPAGE:
+            scroll = max(0, scroll - 10)
+
+        h, w = stdscr.getmaxyx()
+        top_h = (len(qr_lines) + 3) if show_qr else 3
+        top_h = min(top_h, max(3, h - 3))
+        log_h = h - top_h
+        top = curses.newwin(top_h, w, 0, 0)
+        log = curses.newwin(log_h, w, top_h, 0)
+
+        top.erase()
+        _safe_add(top, 0, 0, f" Landir  {url}   (q: QR on/off, Ctrl+C: stop)")
+        line = 1
+        if show_qr:
+            for ql in qr_lines:
+                if line >= top_h - 1:
+                    break
+                _safe_add(top, line, 0, ql)
+                line += 1
+        online = ACTIVITY.online()
+        _safe_add(top, top_h - 1, 0,
+                  " Online: " + (", ".join(online) if online else "-"))
+        top.noutrefresh()
+
+        log.erase()
+        visible = ["%s  %s" % (datetime.fromtimestamp(t).strftime("%H:%M:%S"),
+                               txt) for t, txt in ACTIVITY.events()]
+        max_scroll = max(0, len(visible) - log_h)
+        scroll = min(scroll, max_scroll)
+        end = len(visible) - scroll
+        start = max(0, end - log_h)
+        for i, ln in enumerate(visible[start:end]):
+            _safe_add(log, i, 0, ln)
+        log.noutrefresh()
+        curses.doupdate()
+        time.sleep(0.25)
+
+
+def _run_curses_ui(url):
+    import curses
+    curses.wrapper(lambda stdscr: _ui_loop(stdscr, url))
+
+
 def main():
+    global PLAIN_MODE
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     url = f"http://{lan_ip()}:{PORT}{PAGE_PATH}"
-    print(f"Uploads directory: {UPLOAD_DIR}", flush=True)
-    print(f"Open {url}  (Ctrl+C to stop)", flush=True)
-    try:
-        print(qr_terminal(qr_matrix(url)), flush=True)
-    except ValueError as exc:
-        print(f"(no QR code: {exc})", flush=True)
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopped.")
+    if sys.stdout.isatty() and _curses_available():
+        # Interactive terminal: full-screen UI, server on a background thread.
+        PLAIN_MODE = False
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            _run_curses_ui(url)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.shutdown()
+            server.server_close()
+        print("Stopped.")
+    else:
+        # Piped output / no curses (container, Windows): plain filtered logs.
+        print(f"Uploads directory: {UPLOAD_DIR}", flush=True)
+        print(f"Open {url}  (Ctrl+C to stop)", flush=True)
+        try:
+            print(qr_terminal(qr_matrix(url)), flush=True)
+        except ValueError as exc:
+            print(f"(no QR code: {exc})", flush=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nStopped.")
 
 
 if __name__ == "__main__":

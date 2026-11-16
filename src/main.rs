@@ -9,14 +9,17 @@
 //! everything else 404s. Pass --insecure (-i) for plain /, /upload, ... URLs.
 //! If the requested port is occupied, a random high port (32768-60999) is used.
 
+mod activity;
 mod listing;
 mod page;
 mod paths;
 mod qr;
 mod security;
 mod server;
+mod tui;
 
 use std::io::Read;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
@@ -128,23 +131,45 @@ async fn main() {
     let paths = paths::Paths::new(token.as_deref());
 
     let url = format!("http://{}:{}{}", lan_ip(), port, paths.page);
+
+    let state = Arc::new(server::AppState {
+        upload_dir: upload_dir.clone(),
+        upload_real,
+        token,
+        paths,
+        activity: activity::ActivityLog::new(),
+    });
+    let app = server::router(state.clone());
+    // ConnectInfo lets the activity tracker see client IPs.
+    let make_svc = app.into_make_service_with_connect_info::<SocketAddr>();
+
+    if tui::is_tty() {
+        // Interactive terminal (e.g. `podman run -it`): full-screen UI on the
+        // main thread, HTTP server on a tokio task.
+        let server = tokio::spawn(async move {
+            axum::serve(listener, make_svc)
+                .with_graceful_shutdown(async {
+                    let _ = tokio::signal::ctrl_c().await;
+                })
+                .await
+                .expect("server error");
+        });
+        let _ = tui::run(&state.activity, &url);
+        server.abort();
+        println!("Stopped.");
+        return;
+    }
+
+    // No TTY (container logs, pipes): plain filtered log lines.
     println!("Uploads directory: {}", upload_dir.display());
     println!("Open {url}  (Ctrl+C to stop)");
     match qr::qr_terminal(&url) {
         Ok(q) => println!("{q}"),
         Err(e) => println!("(no QR code: {e})"),
     }
-
-    let state = Arc::new(server::AppState {
-        upload_dir,
-        upload_real,
-        token,
-        paths,
-    });
-    let app = server::router(state).layer(tower_http::trace::TraceLayer::new_for_http());
     // As PID 1 in a container the kernel only delivers signals that have a
     // handler installed; without this, Ctrl+C/SIGINT would be dropped.
-    axum::serve(listener, app)
+    axum::serve(listener, make_svc)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
         })

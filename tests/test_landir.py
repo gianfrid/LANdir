@@ -719,5 +719,112 @@ class StartupSmokeTest(unittest.TestCase):
                 proc.wait(timeout=5)
 
 
+class ActivityTrackingTests(ServerTestBase):
+    secret = ("--insecure",)
+
+    def _events(self):
+        return [t for _, t in self.fds.ACTIVITY.events()]
+
+    def _wait_for_event(self, needle):
+        # events are emitted from handler threads; poll briefly
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            if any(needle in e for e in self._events()):
+                return
+            time.sleep(0.02)
+        self.fail(f"event {needle!r} not recorded: {self._events()}")
+
+    def test_events_and_presence(self):
+        self.upload_ok("/upload", "a.txt", b"abc")
+        os.mkdir(os.path.join(self.upload_dir.name, "sub"))
+        self.get("/files")
+        self.get("/ls/sub")
+        self.get("/")
+        resp = self.get("/fl/a.txt")
+        self.assertEqual(resp.status, 200)
+        resp.read()
+        self._wait_for_event("downloaded a.txt")
+        events = self._events()
+        self.assertTrue(any("127.0.0.1 uploaded a.txt (3 B)" in e
+                            for e in events), events)
+        self.assertTrue(any("127.0.0.1 downloaded a.txt (3 B)" in e
+                            for e in events), events)
+        # listing polls and page loads produce no log lines
+        self.assertFalse(any("/files" in e or "/ls/" in e or '"GET' in e
+                             for e in events), events)
+        # every request (including the quiet ones) refreshed presence
+        self.assertIn("127.0.0.1", self.fds.ACTIVITY.online())
+        # errors are logged with the client IP
+        resp = self.get("/fl/nope.txt")
+        self.assertEqual(resp.status, 404)
+        resp.read()
+        self._wait_for_event("-> 404")
+        events = self._events()
+        self.assertTrue(any("127.0.0.1" in e and "-> 404" in e for e in events),
+                        events)
+
+
+class ClassifyRequestTests(unittest.TestCase):
+    def setUp(self):
+        self.m = load_server()
+
+    def test_upload_is_event(self):
+        self.assertEqual(self.m.classify_request("POST", self.m.UPLOAD_PATH),
+                         "upload")
+
+    def test_download_is_event(self):
+        self.assertEqual(
+            self.m.classify_request("GET", self.m.FILE_DOWNLOAD_PREFIX + "a.txt"),
+            "download")
+
+    def test_listing_and_page_are_quiet(self):
+        self.assertIsNone(self.m.classify_request("GET", self.m.FILES_PATH))
+        self.assertIsNone(
+            self.m.classify_request("GET", self.m.FILES_LIST_PREFIX + "sub"))
+        self.assertIsNone(self.m.classify_request("GET", self.m.PAGE_PATH))
+
+    def test_query_string_ignored(self):
+        self.assertEqual(
+            self.m.classify_request("GET",
+                                   self.m.FILE_DOWNLOAD_PREFIX + "a.txt?x=1"),
+            "download")
+
+
+class ActivityLogTests(unittest.TestCase):
+    def setUp(self):
+        self.m = load_server()
+
+    def test_online_within_ttl(self):
+        log = self.m.ActivityLog(ttl=10.0)
+        log.touch("1.2.3.4")
+        self.assertEqual(log.online(), ["1.2.3.4"])
+
+    def test_expires_after_ttl(self):
+        log = self.m.ActivityLog(ttl=10.0)
+        log.touch("1.2.3.4")
+        now = time.monotonic()
+        self.assertEqual(log.online(now=now + 9.9), ["1.2.3.4"])
+        # a poll every 2s keeps the client visible; 10s after the last one
+        # it is shown offline
+        self.assertEqual(log.online(now=now + 10.1), [])
+
+    def test_any_request_refreshes_presence(self):
+        log = self.m.ActivityLog(ttl=10.0)
+        now = time.monotonic()
+        log._last_seen["1.2.3.4"] = now - 8
+        log.touch("1.2.3.4")
+        self.assertEqual(log.online(now=now + 9.9), ["1.2.3.4"])
+
+    def test_events_recorded_and_capped(self):
+        log = self.m.ActivityLog(max_events=5)
+        for i in range(10):
+            log.add_event(f"e{i}")
+        self.assertEqual([t for _, t in log.events()],
+                         ["e5", "e6", "e7", "e8", "e9"])
+
+    def test_presence_ttl_default_is_10s(self):
+        self.assertEqual(self.m.PRESENCE_TTL, 10.0)
+
+
 if __name__ == "__main__":
     unittest.main()

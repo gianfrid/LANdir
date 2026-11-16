@@ -46,6 +46,8 @@ python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure]
 
 At startup the server prints the URL to open, rendered as a scannable QR code (ANSI half-blocks). If the requested port is occupied, the server automatically falls back to a random available high port (32768-60999).
 
+On an interactive terminal the server shows a full-screen view instead: the QR code and the list of currently-online client IPs stay visible on top (`q` toggles the QR panel), and a scrollable event log below shows who uploaded or downloaded what (arrows/PgUp/PgDn scroll). File-listing polls are never logged as lines — they only keep a client visible in the online list for 10 s after its last request. When output is not a TTY it falls back to plain log lines with the same filtering. This applies to both implementations: `landir.py` uses curses (Unix only — elsewhere it falls back to plain logs), and the Rust binary uses ratatui/crossterm, so it also shows the full-screen UI when the container is run with a TTY (`podman run -it ...`) and plain logs when it is not (e.g. `podman logs`).
+
 Secret mode is the default: the page and upload endpoint live under a fresh random token path (`/<token>/`, `/<token>/upload`) and every other path returns 404; the QR code encodes the full secret URL. Pass `--insecure` (`-i`) to serve on plain `/`, `/upload`, ... URLs instead.
 
 Python 3.7+ standard library only. No packaging, no install step, no config files. Do not introduce dependencies without an explicit request.
@@ -106,9 +108,21 @@ flutter build ios --release       # iOS (requires Xcode + Apple Developer accoun
 flutter build linux --release     # Linux desktop bundle
 ```
 
-See [TODO.md](TODO.md) for remaining release tasks and [GLOSSARY.md](GLOSSARY.md) for terminology.
+See [GLOSSARY.md](GLOSSARY.md) for terminology.
 
-> **Platform caveats:** on iOS the server runs only while the app is in the foreground (Apple suspends backgrounded apps — shown as an in-app warning). On Android a foreground service keeps it alive, but some OEMs (MIUI et al.) may still kill it. See [ADR 0001](docs/adr/0001-flutter-multiplatform.md).
+**Remaining release tasks** (need accounts/keys, not code):
+
+- **Android release signing:** configure a release keystore in
+  `app/android/app/build.gradle.kts` (currently debug-signed), then
+  `flutter build apk --release`.
+- **iOS distribution:** Apple Developer enrollment, then
+  `flutter build ios --release` / TestFlight.
+- **Linux AppImage:** package the `flutter build linux --release` bundle as an
+  AppImage (icon already at `app/linux/runner/resources/app_icon.png`).
+- **Device matrix:** document tested Android OEMs (background-killer behavior)
+  and iOS versions.
+
+> **Platform caveats:** on iOS the server runs only while the app is in the foreground (Apple suspends backgrounded apps — shown as an in-app warning). On Android a foreground service keeps it alive, but some OEMs (MIUI et al.) may still kill it. AP client isolation on some Wi-Fi networks blocks phone↔phone traffic regardless of app (same LAN caveat as the desktop version). See [ADR 0001](docs/adr/0001-flutter-multiplatform.md).
 
 ## Supply chain
 
@@ -128,12 +142,13 @@ See [TODO.md](TODO.md) for remaining release tasks and [GLOSSARY.md](GLOSSARY.md
   container build + smoke test with podman
 - `.github/dependabot.yml` — weekly updates for the `docker` (Containerfile
   FROM lines, tag+digest) and `cargo` (Cargo.lock) ecosystems
+- **Emulator CI (open task):** `adb forward` + Python probes against an
+  emulator in GitHub Actions
 
 ## See Also
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Technical architecture of all three implementations
 - [SPEC.md](SPEC.md) — Security rules, testing, and conventions
-- [TODO.md](TODO.md) — Remaining release tasks
 - [GLOSSARY.md](GLOSSARY.md) — Project terminology
 - [docs/adr/0001-flutter-multiplatform.md](docs/adr/0001-flutter-multiplatform.md) — Why the app is Flutter, and its deliberate platform limitations
 
