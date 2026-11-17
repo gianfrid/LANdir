@@ -74,18 +74,18 @@ podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads ghcr.io/gianfrid/land
 # open http://<host-ip>:8000/
 ```
 
-Image tags: `latest` tracks the newest build; each `v*` release is also
-tagged with its version (e.g. `ghcr.io/gianfrid/landir:v1.2.3`). Both amd64
-and arm64 are published as a multi-arch manifest list.
+Image tags: `latest` / `:rolling` are rebuilt on every push (amd64), and
+`:arm64` is rebuilt by a monthly scheduled workflow. `podman pull
+ghcr.io/gianfrid/landir:latest` always gets the newest amd64 build (old
+digests stay pullable by sha).
 
 ### Rolling builds (always the newest, previous one replaced)
 
 Every push to `slop` publishes under fixed moving names (see
 `.github/workflows/rolling.yml`):
 
-- **Image:** `ghcr.io/gianfrid/landir:latest` and `:rolling` are re-pushed on
-  each build, so `podman pull ghcr.io/gianfrid/landir:latest` always gets the
-  newest (old digests stay pullable by sha).
+- **Image:** `ghcr.io/gianfrid/landir:latest` and `:rolling` (amd64) are
+  re-pushed on each build and smoke-tested.
 - **APK:** attached to the persistent **rolling** GitHub Release as
   `landir-arm64.apk` (asset replaced on each build). Point Obtanium at this
   repo (github.com/gianfrid/landir) and it will track that release's APK.
@@ -199,14 +199,15 @@ See [GLOSSARY.md](GLOSSARY.md) for terminology.
 ## CI / automation (GitHub, free for public repos)
 
 - `.github/workflows/ci.yml` — on every push/PR: Python unittest suite, `cargo test
-  --locked`, `cargo audit`, SBOM freshness check (normalized diff), and a
-  container build + smoke test with podman
-- `.github/workflows/release.yml` — on `v*` tags: signed release APK attached to a
-  GitHub Release, and the container image built (multi-arch) and pushed to
-  `ghcr.io/gianfrid/landir` (`latest` + version tag)
+  --locked`, `cargo audit`, SBOM freshness check (normalized diff)
 - `.github/workflows/rolling.yml` — on every push to `slop`: release-signed APK
-  published to the persistent `rolling` release (for Obtanium) and the image
-  re-pushed as `ghcr.io/gianfrid/landir:latest` / `:rolling`
+  published to the persistent `rolling` release (for Obtanium), plus the amd64
+  container image built, smoke-tested, and re-pushed as
+  `ghcr.io/gianfrid/landir:latest` / `:rolling`
+- `.github/workflows/arm64-monthly.yml` — monthly (cron): arm64 container image
+  pushed as `ghcr.io/gianfrid/landir:arm64`
+- `.github/workflows/release.yml` — on `v*` tags: signed release APK attached to a
+  GitHub Release
 - `.github/dependabot.yml` — weekly updates for the `docker` (Containerfile
   FROM lines, tag+digest) and `cargo` (Cargo.lock) ecosystems
 - **Emulator CI (open task):** `adb forward` + Python probes against an

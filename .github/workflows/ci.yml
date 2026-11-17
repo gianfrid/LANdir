@@ -40,32 +40,6 @@ jobs:
           norm < SBOM.spdx.json > /tmp/sbom-old.json
           diff /tmp/sbom-old.json /tmp/sbom-new.json
 
-  container:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build container image
-        run: podman build -f Containerfile -t landir .
-      - name: Smoke test
-        run: |
-          mkdir -p /tmp/smoke-uploads
-          podman run -d --name landir-smoke -p 18080:8000 -v /tmp/smoke-uploads:/app/uploads landir
-          sleep 2
-          podman logs landir-smoke | grep -q "Open http://"
-          podman kill -s INT landir-smoke
-          sleep 1
-          podman ps -a --filter name=landir-smoke --format '{{.Status}}' | grep -q "Exited (0)"
-      # Regression: the advertised URL must use the *mapped* port (18080),
-      # not the port bound inside the container (8000).
-      - name: Smoke test --url with a port mapping
-        run: |
-          podman run -d --name landir-url -p 18081:8000 -v /tmp/smoke-uploads:/app/uploads \
-            landir --url http://127.0.0.1:18081
-          sleep 2
-          podman logs landir-url | grep -q "Open http://127.0.0.1:18081/"
-          # The advertised URL must actually serve the page.
-          url=$(podman logs landir-url | grep -o 'Open http://[^ ]*' | sed 's/^Open //')
-          curl -fsS "$url" | grep -q "<title>Landir</title>"
-          podman kill -s INT landir-url
-          sleep 1
-          podman ps -a --filter name=landir-url --format '{{.Status}}' | grep -q "Exited (0)"
+# The container image build + smoke test lives in rolling.yml (it publishes
+# the amd64 image on every push); arm64 is built by the monthly scheduled
+# workflow arm64-monthly.yml.
