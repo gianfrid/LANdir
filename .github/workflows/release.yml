@@ -7,7 +7,7 @@
 # a missing secret fails the build rather than silently publishing a
 # debug-signed APK.
 #
-# The build steps mirror .github/workflows/apk.yml on purpose: extracting a
+# The build steps are duplicated in rolling.yml on purpose: extracting a
 # reusable workflow for five steps is not worth the indirection. If the
 # build changes, change it in both places.
 name: Release
