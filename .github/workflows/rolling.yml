@@ -1,0 +1,126 @@
+# Rolling builds: on every push to slop, build the signed APK and the
+# container image and publish them under fixed, replaceable names so the
+# previous rolling build is superseded:
+#
+#   - APK: attached to the persistent "rolling" GitHub Release as
+#     landir-arm64.apk (asset clobbered on each run). Obtanium pointed at
+#     this repo picks it up as the latest (non-prerelease) release.
+#   - Image: pushed to ghcr.io/<owner>/landir:latest and :rolling, so
+#     `podman pull ghcr.io/gianfrid/landir:latest` always gets the newest
+#     build.
+#
+# Versioned v* tags still go through release.yml (signed APK on a versioned
+# release + versioned image tags); this workflow only handles the rolling
+# channel. The APK build mirrors release.yml on purpose, including the
+# fail-fast secrets check: a rolling build must never silently fall back to
+# a debug-signed APK that users would install over the signed one.
+name: Rolling
+
+on:
+  push:
+    branches: [slop]
+  workflow_dispatch:
+
+permissions:
+  contents: write # move the rolling tag, create/update the release
+  packages: write # push the rolling image to ghcr.io
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+          cache: true
+
+      - name: Fetch packages
+        working-directory: app
+        run: flutter pub get
+
+      # Fail before building if any signing secret is missing (same rule as
+      # release.yml).
+      - name: Check signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for s in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!s:-}" ]; then echo "missing secret: $s" >&2; exit 1; fi
+          done
+
+      - name: Decode release keystore
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release-key.jks
+          echo "ANDROID_KEYSTORE_FILE=/tmp/release-key.jks" >> "$GITHUB_ENV"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Build APK (arm64, release-signed)
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        working-directory: app
+        run: flutter build apk --release --split-per-abi --target-platform=android-arm64
+
+      - name: Publish rolling APK to the rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          cp "$APK" /tmp/landir-arm64.apk
+          # Keep the rolling release pointing at the commit being built.
+          # actions/checkout persists the GITHUB_TOKEN credentials, so this
+          # push is authorized by contents: write above.
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag -f rolling HEAD
+          git push --force origin rolling
+          if gh release view rolling >/dev/null 2>&1; then
+            gh release upload rolling /tmp/landir-arm64.apk --clobber
+          else
+            gh release create rolling --title "Rolling build" \
+              --notes "Automated rolling build of the \`slop\` branch. The APK asset is replaced on every push; versioned releases live under the v* tags." \
+              /tmp/landir-arm64.apk
+          fi
+          gh api --method PATCH \
+            "/repos/${{ github.repository }}/releases/$(gh release view rolling --json id --jq .id)" \
+            -f name="Rolling build (latest)" >/dev/null
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # :latest and :rolling are moving tags — each push replaces the
+      # previous rolling image (old digests remain pullable by sha).
+      - name: Build and push rolling image
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/landir
+        run: |
+          podman build --platform linux/amd64,linux/arm64 -f Containerfile \
+            -t "$IMAGE:latest" -t "$IMAGE:rolling" .
+          podman push "$IMAGE:latest"
+          podman push "$IMAGE:rolling"
+
+      - name: Make package public
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PATCH \
+          "/repos/${{ github.repository }}/packages/container/landir/visibility" \
+          -f visibility=public

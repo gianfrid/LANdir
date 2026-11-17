@@ -74,9 +74,21 @@ podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads ghcr.io/gianfrid/land
 # open http://<host-ip>:8000/
 ```
 
-Image tags: `latest` tracks the newest `v*` release; each release is also
+Image tags: `latest` tracks the newest build; each `v*` release is also
 tagged with its version (e.g. `ghcr.io/gianfrid/landir:v1.2.3`). Both amd64
 and arm64 are published as a multi-arch manifest list.
+
+### Rolling builds (always the newest, previous one replaced)
+
+Every push to `slop` publishes under fixed moving names (see
+`.github/workflows/rolling.yml`):
+
+- **Image:** `ghcr.io/gianfrid/landir:latest` and `:rolling` are re-pushed on
+  each build, so `podman pull ghcr.io/gianfrid/landir:latest` always gets the
+  newest (old digests stay pullable by sha).
+- **APK:** attached to the persistent **rolling** GitHub Release as
+  `landir-arm64.apk` (asset replaced on each build). Point Obtanium at this
+  repo (github.com/gianfrid/landir) and it will track that release's APK.
 
 ### Publishing on a different host port
 
@@ -192,6 +204,9 @@ See [GLOSSARY.md](GLOSSARY.md) for terminology.
 - `.github/workflows/release.yml` — on `v*` tags: signed release APK attached to a
   GitHub Release, and the container image built (multi-arch) and pushed to
   `ghcr.io/gianfrid/landir` (`latest` + version tag)
+- `.github/workflows/rolling.yml` — on every push to `slop`: release-signed APK
+  published to the persistent `rolling` release (for Obtanium) and the image
+  re-pushed as `ghcr.io/gianfrid/landir:latest` / `:rolling`
 - `.github/dependabot.yml` — weekly updates for the `docker` (Containerfile
   FROM lines, tag+digest) and `cargo` (Cargo.lock) ecosystems
 - **Emulator CI (open task):** `adb forward` + Python probes against an
