@@ -104,11 +104,14 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
+      # Prefer a PAT (secret GHCR_TOKEN, scopes read:packages + write:packages):
+      # the default GITHUB_TOKEN is denied (read_package) when the ghcr
+      # namespace already has an unlinked package. Falls back to GITHUB_TOKEN.
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
 
       # docker buildx handles ghcr's blob-existence probes correctly (podman
       # push fails with 403 on the first push to a fresh package).
