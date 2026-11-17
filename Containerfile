@@ -26,6 +26,9 @@ RUN case "$TARGETARCH" in \
 # Pinned by digest (multi-arch index). Dependabot keeps tag+digest in sync;
 # manual fallback: scripts/update-distroless-digest.sh
 FROM gcr.io/distroless/static-debian13:latest@sha256:1a64f46364620465ef9e9a8f5413757dfdf22695e050bbfd7303eeaf17a59383
+# Links the ghcr package to this repository on first push — without it the
+# GITHUB_TOKEN can be denied (read_package) when pushing to the namespace.
+LABEL org.opencontainers.image.source="https://github.com/gianfrid/landir"
 COPY --from=build --chown=65532:65532 /out/landir /app/landir
 COPY --from=build --chown=65532:65532 /out/uploads /app/uploads
 WORKDIR /app
