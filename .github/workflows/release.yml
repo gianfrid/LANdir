@@ -21,8 +21,48 @@ on:
 
 permissions:
   contents: write # create the release and upload the APK
+  packages: write # push the container image to ghcr.io
 
 jobs:
+  # Build the Containerfile and publish it to the GitHub Container Registry
+  # on v* tags, so users can `podman pull ghcr.io/gianfrid/landir` instead
+  # of building locally. Runs on tags only; manual dispatch on a branch
+  # builds nothing (there is no meaningful tag to publish).
+  container:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # checkout
+      packages: write # ghcr.io push
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # Multi-arch (amd64 + arm64) manifest list; the Containerfile maps
+      # TARGETARCH to the right musl target. QEMU binfmt on the runner
+      # covers the non-native arch.
+      - name: Build and push container image
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/landir
+          TAG: ${{ github.ref_name }}
+        run: |
+          podman build --platform linux/amd64,linux/arm64 -f Containerfile \
+            -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
+          podman push "$IMAGE:$TAG"
+          podman push "$IMAGE:latest"
+
+      # First push creates the package private by default even in a public
+      # repo; flip it to public so the image is anonymously pullable.
+      - name: Make package public
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PATCH \
+          "/repos/${{ github.repository }}/packages/container/landir/visibility" \
+          -f visibility=public
+
   release:
     runs-on: ubuntu-latest
     steps:

@@ -59,15 +59,24 @@ implementation as a distroless static image (~4.5 MB; static binary ~1.3 MB,
 no shell/libc/package manager, runs as UID 65532):
 
 ```bash
-# build
+# pull the prebuilt image (published to the GitHub Container Registry on
+# every v* tag; public, no login needed)
+podman pull ghcr.io/gianfrid/landir:latest
+# docker pull ghcr.io/gianfrid/landir:latest   # also works
+
+# or build it yourself from the Containerfile
 podman build -f Containerfile -t landir .
 # docker build -f Containerfile -t landir .   # also works
 
 # run (-it attaches a TTY so Ctrl+C stops the server; uploads persist to
 # ./uploads on the host)
-podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads landir
+podman run --rm -it -p 8000:8000 -v ./uploads:/app/uploads ghcr.io/gianfrid/landir:latest
 # open http://<host-ip>:8000/
 ```
+
+Image tags: `latest` tracks the newest `v*` release; each release is also
+tagged with its version (e.g. `ghcr.io/gianfrid/landir:v1.2.3`). Both amd64
+and arm64 are published as a multi-arch manifest list.
 
 ### Publishing on a different host port
 
@@ -180,6 +189,9 @@ See [GLOSSARY.md](GLOSSARY.md) for terminology.
 - `.github/workflows/ci.yml` — on every push/PR: Python unittest suite, `cargo test
   --locked`, `cargo audit`, SBOM freshness check (normalized diff), and a
   container build + smoke test with podman
+- `.github/workflows/release.yml` — on `v*` tags: signed release APK attached to a
+  GitHub Release, and the container image built (multi-arch) and pushed to
+  `ghcr.io/gianfrid/landir` (`latest` + version tag)
 - `.github/dependabot.yml` — weekly updates for the `docker` (Containerfile
   FROM lines, tag+digest) and `cargo` (Cargo.lock) ecosystems
 - **Emulator CI (open task):** `adb forward` + Python probes against an
