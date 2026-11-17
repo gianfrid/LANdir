@@ -103,6 +103,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Register binfmt handlers so podman can run the arm64 build leg under
+      # qemu; without this the multi-platform build fails at the first RUN.
+      - uses: docker/setup-qemu-action@v3
+
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
