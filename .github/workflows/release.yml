@@ -37,25 +37,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Register binfmt handlers so podman can run the arm64 build leg under
-      # qemu; without this the multi-platform build fails at the first RUN.
+      # Register binfmt handlers so the arm64 build leg can run under qemu.
       - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Log in to ghcr.io
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Multi-arch (amd64 + arm64) manifest list; the Containerfile maps
-      # TARGETARCH to the right musl target. QEMU binfmt on the runner
-      # covers the non-native arch.
+      # TARGETARCH to the right musl target. docker buildx handles ghcr's
+      # blob-existence probes correctly (podman push fails with 403 on the
+      # first push to a fresh package).
       - name: Build and push container image
         env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/landir
           TAG: ${{ github.ref_name }}
-        run: |
-          podman build --platform linux/amd64,linux/arm64 -f Containerfile \
-            -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
-          podman push "$IMAGE:$TAG"
-          podman push "$IMAGE:latest"
+        run: docker buildx build --platform linux/amd64,linux/arm64 -f Containerfile \
+          -t "$IMAGE:$TAG" -t "$IMAGE:latest" --push .
 
       # First push creates the package private by default even in a public
       # repo; flip it to public so the image is anonymously pullable.
