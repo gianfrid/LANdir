@@ -134,24 +134,26 @@ class FileBrowserView extends ConsumerWidget {
   Future<void> _pickAndUpload(BuildContext context, WidgetRef ref) async {
     final files = await FilePicker.pickFiles();
     if (files.isEmpty) return;
-    final file = files.first;
-    final name = file.name;
-    final Uint8List bytes;
-    if (file.path != null) {
-      bytes = await File(file.path!).readAsBytes();
-    } else {
-      bytes = await file.xFile.readAsBytes();
+    final notifier = ref.read(clientControllerProvider.notifier);
+    var ok = 0;
+    for (final file in files) {
+      final Uint8List bytes;
+      if (file.path != null) {
+        bytes = await File(file.path!).readAsBytes();
+      } else {
+        bytes = await file.xFile.readAsBytes();
+      }
+      if (await notifier.uploadFile(file.name, bytes)) ok++;
     }
-    await ref
-        .read(clientControllerProvider.notifier)
-        .uploadFile(name, bytes);
     if (context.mounted) {
       final state = ref.read(clientControllerProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(state.error != null
               ? 'Upload failed: ${state.error}'
-              : 'Uploaded $name'),
+              : ok == files.length
+                  ? 'Uploaded $ok file(s)'
+                  : 'Uploaded $ok of ${files.length} file(s)'),
         ),
       );
     }
