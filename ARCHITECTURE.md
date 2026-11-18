@@ -57,7 +57,7 @@ One Flutter/Dart codebase for Android, iOS, and Linux desktop (see
   Tested byte-identical against golden vectors exported from `landir.py`
   by `scripts/export_golden.py`.
 - **`app/lib/src/views/` + `app/lib/src/providers/` — Flutter UI layer**
-  (Riverpod code-gen providers). Host view (QR via `qr_flutter`, start/stop,
+  (Riverpod code-gen providers). Host view (QR via `qr_flutter`, start/stop, port selection,
   secret-token toggle, Android foreground service), client view (QR scan via
   `mobile_scanner`, server registry persisted with `shared_preferences`,
   upload via `file_picker`, file browser, download). Responsive layout:

@@ -18,6 +18,8 @@ part 'server_provider.g.dart';
 
 /// Immutable state of the host server.
 class ServerState {
+  static const _unsetError = Object();
+
   final bool running;
   final int? port;
   final String? url;
@@ -42,7 +44,8 @@ class ServerState {
     String? url,
     String? token,
     bool? insecure,
-    String? error,
+    // Null clears the error, so a sentinel marks "argument not given".
+    Object? error = _unsetError,
     String? hotspotSsid,
   }) =>
       ServerState(
@@ -51,7 +54,9 @@ class ServerState {
         url: url ?? this.url,
         token: token ?? this.token,
         insecure: insecure ?? this.insecure,
-        error: error ?? this.error,
+        error: identical(error, _unsetError)
+            ? this.error
+            : error as String?,
         hotspotSsid: hotspotSsid ?? this.hotspotSsid,
       );
 }
