@@ -3,6 +3,7 @@
 // (phone) screens, bottom-nav tabs.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,6 +70,9 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
   @override
   void initState() {
     super.initState();
+    // Share intents only exist on Android/iOS; the plugin has no desktop
+    // implementation and throws MissingPluginException there.
+    if (!Platform.isAndroid && !Platform.isIOS) return;
     // Shares arriving while the app is running.
     _shareSub = ReceiveSharingIntent.instance
         .getMediaStream()
