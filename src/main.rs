@@ -7,7 +7,8 @@
 //! to open from any device on the same network, rendered as a scannable QR
 //! code. By default the pages live under a random unguessable URL path;
 //! everything else 404s. Pass --insecure (-i) for plain /, /upload, ... URLs.
-//! If the requested port is occupied, a random high port (32768-60999) is used.
+//! If the requested port is occupied — or --port 0 is given, which delegates
+//! the choice — a random high port (32768-60999) is used.
 //!
 //! In a container the port clients reach is the *mapped* port, which the
 //! process cannot discover. Pass --url to set the advertised origin:
@@ -35,8 +36,9 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(about = "LAN file upload server", version)]
 struct Cli {
-    /// Port to listen on (falls back to a random high port if occupied,
-    /// unless --url is set, in which case an occupied port is an error)
+    /// Port to listen on (0, or an occupied port, falls back to a random
+    /// high port, unless --url is set, in which case an occupied port is
+    /// an error)
     #[arg(long, default_value_t = 8000)]
     port: i64,
     /// Directory where uploaded files are stored
@@ -220,8 +222,9 @@ async fn main() {
         .expect("failed to create uploads directory");
     let upload_real = std::fs::canonicalize(&upload_dir).expect("failed to canonicalize uploads dir");
 
-    // out-of-range --port behaves like an occupied port: fall back to random
-    let requested = if (0..=65535).contains(&cli.port) {
+    // 0 delegates the choice (like an out-of-range --port): go straight
+    // to the random high-port loop, not to OS-ephemeral binding.
+    let requested = if (1..=65535).contains(&cli.port) {
         Some(cli.port as u16)
     } else {
         None
@@ -457,6 +460,20 @@ mod tests {
             .await
             .expect("fallback must find another port");
         assert_ne!(listener.local_addr().unwrap().port(), port);
+    }
+
+    #[tokio::test]
+    async fn port_zero_picks_a_random_high_port() {
+        // 0 delegates the choice (no explicit request, like the out-of-range
+        // --port): every draw must stay in the documented dynamic range
+        // 32768-60999, not an OS-ephemeral port.
+        for _ in 0..20 {
+            let listener = bind_available(None, OnBusy::Fallback)
+                .await
+                .expect("must find a port");
+            let port = listener.local_addr().unwrap().port();
+            assert!((32768..=60999).contains(&port), "port {port} out of range");
+        }
     }
 
     #[test]
