@@ -444,7 +444,7 @@ PAGE = """<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Landir</title>
+<title>LANdir</title>
 <style>
   :root { color-scheme: dark; }
   body { font-family: system-ui, sans-serif; background:#111; color:#eee;
@@ -1055,7 +1055,7 @@ def _ui_loop(stdscr, url):
         log = curses.newwin(log_h, w, top_h, 0)
 
         top.erase()
-        _safe_add(top, 0, 0, f" Landir  {url}   (q: QR on/off, Ctrl+C: stop)")
+        _safe_add(top, 0, 0, f" LANdir  {url}   (q: QR on/off, Ctrl+C: stop)")
         line = 1
         if show_qr:
             for ql in qr_lines:

@@ -95,7 +95,7 @@ void main() {
       expect(res.statusCode, 200);
       expect(res.headers.value('content-type'), contains('text/html'));
       final body = await res.transform(utf8.decoder).join();
-      expect(body, contains('<title>Landir</title>'));
+      expect(body, contains('<title>LANdir</title>'));
     });
 
     test('POST /upload saves a file, GET /files lists it, GET /fl/ downloads it', () async {
@@ -364,7 +364,7 @@ void main() {
       final res = await get('/testtoken123/');
       expect(res.statusCode, 200);
       final body = await res.transform(utf8.decoder).join();
-      expect(body, contains('<title>Landir</title>'));
+      expect(body, contains('<title>LANdir</title>'));
     });
 
     test('GET / (no token) returns 404 in secret mode', () async {

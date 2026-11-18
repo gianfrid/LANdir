@@ -100,7 +100,7 @@ fn event_loop(
                 .split(area);
 
             let mut top: Vec<Line> = vec![Line::from(format!(
-                " Landir  {url}   (q: QR on/off, Ctrl+C: stop)"
+                " LANdir  {url}   (q: QR on/off, Ctrl+C: stop)"
             ))];
             if show_qr {
                 top.extend(qr_lines.iter().cloned().map(Line::from));
