@@ -826,5 +826,41 @@ class ActivityLogTests(unittest.TestCase):
         self.assertEqual(self.m.PRESENCE_TTL, 10.0)
 
 
+# --------------------------------------------------------------------------
+# Port selection: _find_available_port (occupied fallback, --port 0 semantics)
+
+class FindAvailablePortTest(unittest.TestCase):
+    def setUp(self):
+        self.m = load_server()
+
+    def test_free_port_is_returned_unchanged(self):
+        probe = socket.socket()
+        probe.bind(("0.0.0.0", 0))
+        free = probe.getsockname()[1]
+        probe.close()
+        self.assertEqual(self.m._find_available_port(free), free)
+
+    def test_occupied_port_falls_back_to_random_high_port(self):
+        blocker = socket.socket()
+        blocker.bind(("0.0.0.0", 0))
+        blocker.listen(1)  # an active listener makes the probe bind fail
+        try:
+            busy = blocker.getsockname()[1]
+            picked = self.m._find_available_port(busy)
+        finally:
+            blocker.close()
+        self.assertNotEqual(picked, busy)
+        self.assertGreaterEqual(picked, 32768)
+        self.assertLessEqual(picked, 60999)
+
+    def test_port_zero_picks_random_high_port(self):
+        # 0 delegates the choice; the dynamic/private range is documented
+        # behavior (README), so every draw must land inside it.
+        for _ in range(20):
+            picked = self.m._find_available_port(0)
+            self.assertGreaterEqual(picked, 32768)
+            self.assertLessEqual(picked, 60999)
+
+
 if __name__ == "__main__":
     unittest.main()

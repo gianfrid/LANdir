@@ -10,7 +10,8 @@ same network (e.g. an Android phone), rendered as a scannable QR code.
 By default the pages live under a random unguessable URL path; the QR code
 encodes that full path, and requests to any other path get a 404.
 Pass --insecure (-i) to serve on plain /, /upload, ... URLs instead.
-If the requested port is occupied, a random high port (32768-60999) is used.
+If the requested port is occupied, or --port 0 is given, a random high
+port (32768-60999) is used instead.
 """
 
 import argparse
@@ -33,7 +34,8 @@ def _parse_args():
         description="LAN file upload server",
         usage="%(prog)s [--port PORT] [--dir UPLOADS_DIR] [--insecure]")
     parser.add_argument("--port", type=int, default=8000,
-                        help="port to listen on (default: 8000; falls back to random high port if occupied)")
+                        help="port to listen on (default: 8000; 0 or an "
+                             "occupied port falls back to a random high port)")
     parser.add_argument("--dir", metavar="UPLOADS_DIR", default="uploads",
                         help="directory where uploaded files are stored "
                              "(default: ./uploads)")
@@ -49,17 +51,18 @@ UPLOAD_DIR = os.path.abspath(ARGS.dir)
 
 
 def _find_available_port(start_port):
-    """Try to bind to start_port; if occupied, pick a random high port (32768-60999)."""
+    """Probe start_port; if 0 or occupied, pick a random high port (32768-60999)."""
     import random
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    try:
-        sock.bind(("0.0.0.0", start_port))
-        return start_port
-    except OSError:
-        pass
-    finally:
-        sock.close()
+    if start_port:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("0.0.0.0", start_port))
+            return start_port
+        except OSError:
+            pass
+        finally:
+            sock.close()
     # Port is occupied; try random high ports (IANA dynamic/private range)
     for _ in range(100):
         port = random.randint(32768, 60999)

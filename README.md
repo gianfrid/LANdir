@@ -44,7 +44,7 @@ python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure]
 # defaults: port 8000, uploads in ./uploads, secret mode ON
 ```
 
-At startup the server prints the URL to open, rendered as a scannable QR code (ANSI half-blocks). If the requested port is occupied, the server automatically falls back to a random available high port (32768-60999), except in the container image with `--url` set (see below).
+At startup the server prints the URL to open, rendered as a scannable QR code (ANSI half-blocks). If the requested port is occupied — or `--port 0` is given, which delegates the choice — the server automatically falls back to a random available high port (32768-60999), except in the container image with `--url` set (see below).
 
 On an interactive terminal the server shows a full-screen view instead: the QR code and the list of currently-online client IPs stay visible on top (`q` toggles the QR panel), and a scrollable event log below shows who uploaded or downloaded what (arrows/PgUp/PgDn scroll). File-listing polls are never logged as lines — they only keep a client visible in the online list for 10 s after its last request. When output is not a TTY it falls back to plain log lines with the same filtering. This applies to both implementations: `landir.py` uses curses (Unix only — elsewhere it falls back to plain logs), and the Rust binary uses ratatui/crossterm, so it also shows the full-screen UI when the container is run with a TTY (`podman run -it ...`) and plain logs when it is not (e.g. `podman logs`).
 
