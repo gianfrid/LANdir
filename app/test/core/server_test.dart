@@ -392,4 +392,52 @@ void main() {
       await res.drain();
     });
   });
+
+  group('port fallback', () {
+    // Occupy a dynamically chosen port (any fixed port may really be taken
+    // on the host running the tests) and return the blocker plus its port.
+    Future<(HttpServer, int)> occupyAPort() async {
+      final blocker = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+      return (blocker, blocker.port);
+    }
+
+    // Reference semantics (landir.py's _find_available_port): fallback
+    // draws come from the documented dynamic range, not OS-ephemeral.
+    bool inDynamicRange(int p) => p >= 32768 && p <= 60999;
+
+    test('occupied port falls back to a random high port', () async {
+      final (blocker, taken) = await occupyAPort();
+      addTearDown(() => blocker.close(force: true));
+
+      final srv = LandirServer(
+        ServerConfig(port: taken, uploadDir: tmpDir, insecure: true),
+        DirectoryFileSink(tmpDir),
+      );
+      await srv.start();
+      addTearDown(() => srv.stop());
+
+      expect(srv.boundPort, isNot(taken));
+      expect(inDynamicRange(srv.boundPort), isTrue,
+          reason: 'boundPort ${srv.boundPort} outside 32768-60999');
+
+      // The server actually serves on the fallback port.
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+      final req = await client.get('127.0.0.1', srv.boundPort, '/');
+      final res = await req.close();
+      expect(res.statusCode, 200);
+      await res.drain();
+    });
+
+    test('port 0 draws a free port from the dynamic range', () async {
+      final srv = LandirServer(
+        ServerConfig(port: 0, uploadDir: tmpDir, insecure: true),
+        DirectoryFileSink(tmpDir),
+      );
+      await srv.start();
+      addTearDown(() => srv.stop());
+      expect(inDynamicRange(srv.boundPort), isTrue,
+          reason: 'boundPort ${srv.boundPort} outside 32768-60999');
+    });
+  });
 }

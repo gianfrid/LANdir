@@ -4,16 +4,31 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../core/server.dart' show ServerConfig;
 import '../providers/server_provider.dart';
 
-class HostView extends ConsumerWidget {
+class HostView extends ConsumerStatefulWidget {
   const HostView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HostView> createState() => _HostViewState();
+}
+
+class _HostViewState extends ConsumerState<HostView> {
+  @override
+  void initState() {
+    super.initState();
+    // Restore the persisted port choice once (mirrors the client view,
+    // which loads its registry on creation in the same way).
+    ref.read(serverControllerProvider.notifier).loadPersistedPort();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(serverControllerProvider);
 
     return Scaffold(
@@ -73,6 +88,21 @@ class HostView extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const Text('Port'),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 100,
+              child: _PortField(port: state.requestedPort),
+            ),
+            const SizedBox(width: 8),
+            const Text('0 = random',
+                style: TextStyle(color: Colors.grey, fontSize: 12)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             const Text('Secret URL mode'),
             Switch(
               value: !state.insecure,
@@ -125,6 +155,83 @@ class HostView extends ConsumerWidget {
           style: FilledButton.styleFrom(backgroundColor: Colors.red),
         ),
       ],
+    );
+  }
+}
+
+/// Numeric port input for the idle host view. Commits valid drafts
+/// (0-65535) to the server controller; an invalid or empty draft is
+/// flagged and discarded in favor of the committed port on unfocus, so
+/// the field never silently disagrees with the controller.
+class _PortField extends ConsumerStatefulWidget {
+  const _PortField({required this.port});
+
+  final int port;
+
+  @override
+  ConsumerState<_PortField> createState() => _PortFieldState();
+}
+
+class _PortFieldState extends ConsumerState<_PortField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  bool _invalid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.port.toString());
+    _focusNode = FocusNode()..addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus && _invalid) {
+      // Discard the invalid draft; reshow the committed port.
+      _controller.text = widget.port.toString();
+      setState(() => _invalid = false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PortField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sync external changes (e.g. reset after stop) without clobbering
+    // what the user is currently typing.
+    if (int.tryParse(_controller.text) != widget.port) {
+      _controller.text = widget.port.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      maxLength: 5,
+      decoration: InputDecoration(
+        counterText: '',
+        isDense: true,
+        border: const OutlineInputBorder(),
+        errorText: _invalid ? '0 - 65535' : null,
+      ),
+      onChanged: (value) {
+        final port = int.tryParse(value);
+        if (port != null && ServerConfig.isValidPort(port)) {
+          ref.read(serverControllerProvider.notifier).setPort(port);
+          if (_invalid) setState(() => _invalid = false);
+        } else {
+          setState(() => _invalid = true);
+        }
+      },
     );
   }
 }

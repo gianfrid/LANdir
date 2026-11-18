@@ -1,11 +1,14 @@
 // Riverpod providers for the Landir host server lifecycle.
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/file_sink.dart';
 import '../core/server.dart';
@@ -21,7 +24,8 @@ class ServerState {
   static const _unsetError = Object();
 
   final bool running;
-  final int? port;
+  final int? port; // bound port while running
+  final int requestedPort; // port for the next start; 0 = pick a free one
   final String? url;
   final String? token;
   final bool insecure;
@@ -31,6 +35,7 @@ class ServerState {
   const ServerState({
     this.running = false,
     this.port,
+    this.requestedPort = 8000,
     this.url,
     this.token,
     this.insecure = false,
@@ -41,6 +46,7 @@ class ServerState {
   ServerState copyWith({
     bool? running,
     int? port,
+    int? requestedPort,
     String? url,
     String? token,
     bool? insecure,
@@ -51,6 +57,7 @@ class ServerState {
       ServerState(
         running: running ?? this.running,
         port: port ?? this.port,
+        requestedPort: requestedPort ?? this.requestedPort,
         url: url ?? this.url,
         token: token ?? this.token,
         insecure: insecure ?? this.insecure,
@@ -67,6 +74,13 @@ Future<FileSink> fileSink(Ref ref) async {
   if (Platform.isAndroid) return MediaStoreFileSink();
   return DocumentsFileSink.create();
 }
+
+/// The URL clients are told to open (GLOSSARY: Advertised URL): always
+/// built from the bound port, so an occupied requested port that fell
+/// back is advertised correctly.
+@visibleForTesting
+String advertisedUrl(String address, int port, String? token) =>
+    'http://$address:$port${token != null ? '/$token/' : '/'}';
 
 /// The running LandirServer instance (kept alive while running).
 @riverpod
@@ -90,7 +104,7 @@ class ServerController extends _$ServerController {
 
       final token = state.insecure ? null : _generateToken();
       final config = ServerConfig(
-        port: 8000,
+        port: state.requestedPort,
         uploadDir: uploadDir,
         insecure: state.insecure,
         secretToken: token,
@@ -107,8 +121,7 @@ class ServerController extends _$ServerController {
       }
 
       final addr = await findBestAddress();
-      final pagePath = token != null ? '/$token/' : '/';
-      final url = 'http://${addr.address}:$port$pagePath';
+      final url = advertisedUrl(addr.address, port, token);
 
       state = state.copyWith(
         running: true,
@@ -132,7 +145,9 @@ class ServerController extends _$ServerController {
     if (Platform.isAndroid) {
       await FlutterForegroundTask.stopService();
     }
-    state = const ServerState();
+    // Keep the user's port choice (and the error) out of the reset: the
+    // port is a preference, not runtime state.
+    state = ServerState(requestedPort: state.requestedPort);
   }
 
   Future<void> _startForegroundService(int port) async {
@@ -155,7 +170,35 @@ class ServerController extends _$ServerController {
 
   void toggleInsecure() {
     if (state.running) return; // only changeable while stopped
-    state = ServerState(insecure: !state.insecure);
+    state = state.copyWith(insecure: !state.insecure);
+  }
+
+  static const _requestedPortPrefsKey = 'requested_port';
+
+  /// Select the port for the next start. 0 means the server picks a free
+  /// dynamic-range port itself. Only changeable while stopped; persists
+  /// across app restarts (same store as the client registry).
+  void setPort(int port) {
+    if (state.running) return;
+    if (!ServerConfig.isValidPort(port)) return;
+    state = state.copyWith(requestedPort: port);
+    unawaited(_saveRequestedPort(port));
+  }
+
+  Future<void> _saveRequestedPort(int port) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_requestedPortPrefsKey, port);
+  }
+
+  /// Restores the persisted port choice if the app starts fresh (the
+  /// host view calls this once on creation, mirroring the client view).
+  Future<void> loadPersistedPort() async {
+    if (state.running) return;
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getInt(_requestedPortPrefsKey);
+    if (saved != null && ServerConfig.isValidPort(saved)) {
+      state = state.copyWith(requestedPort: saved);
+    }
   }
 
   String _generateToken() {

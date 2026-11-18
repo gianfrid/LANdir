@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'file_sink.dart';
@@ -13,6 +14,11 @@ import 'security.dart';
 
 /// Configuration for a Landir server instance.
 class ServerConfig {
+  /// A valid requested port: 0-65535, where 0 delegates the choice to the
+  /// host (it picks a random free dynamic-range port). One rule, shared by
+  /// the port picker UI and the controller.
+  static bool isValidPort(int port) => port >= 0 && port <= 65535;
+
   final int port;
   final String uploadDir;
   final bool insecure; // false = secret mode (random token path)
@@ -44,9 +50,36 @@ class LandirServer {
 
   String get pagePath => config.pagePath;
 
+  final _random = Random();
+
   Future<void> start() async {
-    _httpServer = await HttpServer.bind(InternetAddress.anyIPv4, config.port);
+    _httpServer = await _bindWithFallback(config.port);
     _httpServer!.listen(_handleRequest);
+  }
+
+  /// Mirror of landir.py's _find_available_port: try the requested port;
+  /// an occupied request (or 0, which delegates the choice) falls back to
+  /// up to 100 random drawers in the documented dynamic range 32768-60999.
+  /// No OS-ephemeral binding: the reference and README pin that range.
+  Future<HttpServer> _bindWithFallback(int requested) async {
+    if (requested != 0) {
+      try {
+        return await HttpServer.bind(InternetAddress.anyIPv4, requested);
+      } on SocketException {
+        // occupied; fall through to the random draws
+      }
+    }
+    const minPort = 32768, maxPort = 60999;
+    Object? lastError;
+    for (var i = 0; i < 100; i++) {
+      final candidate = minPort + _random.nextInt(maxPort - minPort + 1);
+      try {
+        return await HttpServer.bind(InternetAddress.anyIPv4, candidate);
+      } on SocketException catch (e) {
+        lastError = e;
+      }
+    }
+    throw StateError('no available port after 100 attempts: $lastError');
   }
 
   Future<void> stop() async {
