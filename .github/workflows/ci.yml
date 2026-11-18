@@ -40,6 +40,35 @@ jobs:
           norm < SBOM.spdx.json > /tmp/sbom-old.json
           diff /tmp/sbom-old.json /tmp/sbom-new.json
 
+  # The pub bumps and the app itself need a Flutter gate: matching the
+  # SDK Rolling builds the APK with means a pubspec that cannot resolve
+  # (e.g. a test/build_runner version above flutter_test's ceiling) fails
+  # here instead of after the merge.
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+          cache: true
+
+      - name: Fetch packages
+        run: flutter pub get
+
+      - name: Static analysis
+        # Pre-existing lint infos (avoid_print in tool/, two build-context
+        # warnings in file_browser_view) stay non-fatal; errors fail.
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: App tests
+        run: flutter test
+
 # The container image build + smoke test lives in rolling.yml (it publishes
 # the amd64 image on every push); arm64 is built by the monthly scheduled
 # workflow arm64-monthly.yml.
