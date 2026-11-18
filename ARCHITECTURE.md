@@ -61,8 +61,8 @@ One Flutter/Dart codebase for Android, iOS, and Linux desktop (see
   secret-token toggle, Android foreground service), client view (QR scan via
   `mobile_scanner`, server registry persisted with `shared_preferences`,
   upload via `file_picker`, file browser, download). Responsive layout:
-  side-by-side Host/Client on wide (desktop) windows, bottom-nav tabs on
-  phone.
+  on wide (desktop) windows a segmented Host/Client toggle with a Downloads
+  side panel; bottom-nav tabs on phone.
 - **Platform channels** (`app/lib/src/platform/`): `MediaStoreFileSink`
   writes to `MediaStore.Downloads` on Android (Kotlin in `MainActivity.kt`);
   `DocumentsFileSink` uses the app Documents directory on iOS; hotspot via

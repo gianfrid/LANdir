@@ -1,5 +1,6 @@
-// Landir app entry point. Adaptive layout: side-by-side Host/Client on
-// wide (desktop) windows, bottom-nav tabs on narrow (phone) screens.
+// Landir app entry point. Adaptive layout: on wide (desktop) windows a
+// segmented Host/Client toggle with a Downloads side panel; on narrow
+// (phone) screens, bottom-nav tabs.
 
 import 'dart:async';
 
@@ -60,6 +61,9 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
   // Default to the Client tab on phones: most sessions are "upload to the
   // server I was connected to", and loadPersisted() reconnects automatically.
   int _tab = 1;
+  // Desktop role toggle: 0 = Host, 1 = Client.
+  int _role = 0;
+  bool _wide = false;
   StreamSubscription<List<SharedMediaFile>>? _shareSub;
 
   @override
@@ -86,24 +90,59 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
     final shares = incomingSharesFromMedia(media);
     if (shares.isEmpty) return;
     ref.read(clientControllerProvider.notifier).receiveShares(shares);
-    // Bring the client tab forward so the user sees the upload happen.
-    setState(() => _tab = 1);
+    // Bring the client forward so the user sees the upload happen.
+    setState(() {
+      if (_wide) {
+        _role = 1;
+      } else {
+        _tab = 1;
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth > _wideBreakpoint) {
-          // Desktop admin: all three panels side by side
+        _wide = constraints.maxWidth > _wideBreakpoint;
+        if (_wide) {
+          // Desktop: Host/Client behind a segmented toggle, Downloads beside.
           return Scaffold(
-            body: const Row(
+            body: Row(
               children: [
-                Expanded(child: HostView()),
-                VerticalDivider(width: 1),
-                Expanded(child: ClientView()),
-                VerticalDivider(width: 1),
-                Expanded(child: DownloadsView()),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: SegmentedButton<int>(
+                          segments: const [
+                            ButtonSegment(
+                                value: 0,
+                                icon: Icon(Icons.dns),
+                                label: Text('Host')),
+                            ButtonSegment(
+                                value: 1,
+                                icon: Icon(Icons.devices),
+                                label: Text('Client')),
+                          ],
+                          selected: {_role},
+                          onSelectionChanged: (selected) =>
+                              setState(() => _role = selected.first),
+                        ),
+                      ),
+                      Expanded(
+                        child: IndexedStack(
+                          index: _role,
+                          children: const [HostView(), ClientView()],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const VerticalDivider(width: 1),
+                const Expanded(child: DownloadsView()),
               ],
             ),
           );

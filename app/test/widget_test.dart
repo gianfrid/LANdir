@@ -1,14 +1,14 @@
-// Widget tests for the default (Client) tab and the host view.
-// The phone layout opens on the Client tab by default.
+// Widget tests for the default (Client) tab, the host view, and the
+// wide (desktop) layout. The phone layout opens on the Client tab by
+// default; the desktop layout shows a Host/Client toggle plus Downloads.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:landir_app/src/providers/server_provider.dart';
-
 import 'package:landir_app/main.dart';
+import 'package:landir_app/src/providers/server_provider.dart';
 
 void main() {
   setUp(() {
@@ -16,8 +16,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  // Phone-sized viewport so the tab layout (not the wide 3-panel desktop
-  // layout) is what gets tested.
+  // Phone-sized viewport so the tab layout (not the wide desktop layout
+  // with its segmented toggle) is what gets tested.
   void usePhoneViewport(WidgetTester tester) {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -61,6 +61,7 @@ void main() {
     final switchWidget = tester.widget<Switch>(find.byType(Switch));
     expect(switchWidget.value, isFalse);
   });
+
   testWidgets('host port field defaults to 8000 and commits entered ports',
       (tester) async {
     usePhoneViewport(tester);
@@ -106,4 +107,30 @@ void main() {
     expect(find.text('8000'), findsOneWidget);
   });
 
+  // Wide viewport so the desktop layout (segmented Host/Client toggle plus
+  // Downloads side panel) is what gets tested.
+  void useDesktopViewport(WidgetTester tester) {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1.0;
+  }
+
+  testWidgets('desktop layout toggles Host/Client, Downloads beside',
+      (tester) async {
+    useDesktopViewport(tester);
+    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+
+    // No bottom navigation on desktop; Downloads is a side panel and the
+    // Host panel shows first behind the segmented toggle.
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.byType(SegmentedButton<int>), findsOneWidget);
+    expect(find.text('Start server'), findsOneWidget);
+
+    // Switching to Client swaps the panel; Downloads stays put.
+    await tester.tap(find.text('Client'));
+    await tester.pump();
+    expect(find.textContaining('No servers yet'), findsOneWidget);
+    expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
+    expect(find.text('Downloads'), findsOneWidget);
+  });
 }
