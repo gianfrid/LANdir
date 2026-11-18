@@ -108,25 +108,49 @@ void main() {
   });
 
   // Wide viewport so the desktop layout (segmented Host/Client toggle plus
-  // Downloads side panel) is what gets tested.
+  // an auto-hiding Downloads side panel) is what gets tested.
   void useDesktopViewport(WidgetTester tester) {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1.0;
   }
 
-  testWidgets('desktop layout toggles Host/Client, Downloads beside',
+  testWidgets('desktop: empty downloads frame auto-hides, toggle pins it',
       (tester) async {
     useDesktopViewport(tester);
     await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpAndSettle();
 
-    // No bottom navigation on desktop; Downloads is a side panel and the
-    // Host panel shows first behind the segmented toggle.
+    // No bottom navigation on desktop, and an empty downloads list means
+    // the side frame collapses instead of eating a third of the window.
     expect(find.byType(NavigationBar), findsNothing);
-    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.text('Downloads'), findsNothing);
     expect(find.byType(SegmentedButton<int>), findsOneWidget);
     expect(find.text('Start server'), findsOneWidget);
+    // The outlined toolbar icon is the auto-hide mode.
+    expect(find.byIcon(Icons.view_sidebar_outlined), findsOneWidget);
 
-    // Switching to Client swaps the panel; Downloads stays put.
+    // Pinning brings the (empty) frame back; the icon reflects the mode.
+    await tester.tap(find.byIcon(Icons.view_sidebar_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.byIcon(Icons.view_sidebar), findsOneWidget);
+    expect(find.byIcon(Icons.view_sidebar_outlined), findsNothing);
+  });
+
+  testWidgets('desktop: downloaded files make the frame appear by itself',
+      (tester) async {
+    useDesktopViewport(tester);
+    // A completed download in the registry: the frame shows up without
+    // the user touching the toggle, even in auto-hide mode.
+    SharedPreferences.setMockInitialValues({
+      'landir_local_downloads': '[{"name":"cat.png","timestamp":1731950000000}]',
+    });
+    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Downloads'), findsOneWidget);
+
+    // Switching to Client swaps the role panel; Downloads stays put.
     await tester.tap(find.text('Client'));
     await tester.pump();
     expect(find.textContaining('No servers yet'), findsOneWidget);

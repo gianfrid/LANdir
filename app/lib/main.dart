@@ -11,6 +11,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import 'src/platform/share_intent.dart';
 import 'src/providers/client_provider.dart';
+import 'src/providers/local_downloads_provider.dart';
 import 'src/views/client_view.dart';
 import 'src/views/downloads_view.dart';
 import 'src/views/host_view.dart';
@@ -65,6 +66,9 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
   // Desktop role toggle: 0 = Host, 1 = Client.
   int _role = 0;
   bool _wide = false;
+  // When true (default) the desktop Downloads frame hides itself while
+  // the download list is empty; the toolbar toggle pins it open.
+  bool _autoHideDownloads = true;
   StreamSubscription<List<SharedMediaFile>>? _shareSub;
 
   @override
@@ -110,7 +114,12 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
       builder: (context, constraints) {
         _wide = constraints.maxWidth > _wideBreakpoint;
         if (_wide) {
-          // Desktop: Host/Client behind a segmented toggle, Downloads beside.
+          // Desktop: Host/Client behind a segmented toggle, Downloads beside
+          // unless it would be an empty frame that just eats width.
+          final downloadsVisible = !_autoHideDownloads ||
+              ref
+                  .watch(localDownloadsProvider)
+                  .maybeWhen(data: (items) => items.isNotEmpty, orElse: () => false);
           return Scaffold(
             body: Row(
               children: [
@@ -120,20 +129,37 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(8),
-                        child: SegmentedButton<int>(
-                          segments: const [
-                            ButtonSegment(
-                                value: 0,
-                                icon: Icon(Icons.dns),
-                                label: Text('Host')),
-                            ButtonSegment(
-                                value: 1,
-                                icon: Icon(Icons.devices),
-                                label: Text('Client')),
+                        child: Row(
+                          children: [
+                            SegmentedButton<int>(
+                              segments: const [
+                                ButtonSegment(
+                                    value: 0,
+                                    icon: Icon(Icons.dns),
+                                    label: Text('Host')),
+                                ButtonSegment(
+                                    value: 1,
+                                    icon: Icon(Icons.devices),
+                                    label: Text('Client')),
+                              ],
+                              selected: {_role},
+                              onSelectionChanged: (selected) =>
+                                  setState(() => _role = selected.first),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              // Selected = pinned visible; outlined =
+                              // auto-hides once the list is empty.
+                              isSelected: !_autoHideDownloads,
+                              selectedIcon: const Icon(Icons.view_sidebar),
+                              icon: const Icon(Icons.view_sidebar_outlined),
+                              tooltip: _autoHideDownloads
+                                  ? 'Keep the downloads panel always visible'
+                                  : 'Auto-hide the downloads panel when empty',
+                              onPressed: () => setState(() =>
+                                  _autoHideDownloads = !_autoHideDownloads),
+                            ),
                           ],
-                          selected: {_role},
-                          onSelectionChanged: (selected) =>
-                              setState(() => _role = selected.first),
                         ),
                       ),
                       Expanded(
@@ -145,8 +171,10 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
                     ],
                   ),
                 ),
-                const VerticalDivider(width: 1),
-                const Expanded(child: DownloadsView()),
+                if (downloadsVisible) ...[
+                  const VerticalDivider(width: 1),
+                  const Expanded(child: DownloadsView()),
+                ],
               ],
             ),
           );
