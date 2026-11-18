@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.landir_app"
+    namespace = "gianfrid.landir"
     // Pinned to 37 (not flutter.compileSdkVersion = 36): receive_sharing_intent
     // requires it. AGP 9.1.0 recommends 36 but accepts 37.
     compileSdk = 37
@@ -34,7 +34,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.landir_app"
+        applicationId = "gianfrid.landir"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26

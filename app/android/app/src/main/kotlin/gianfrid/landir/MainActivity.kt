@@ -1,4 +1,4 @@
-package com.example.landir_app
+package gianfrid.landir
 
 import android.Manifest
 import android.content.ContentValues
