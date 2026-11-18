@@ -38,10 +38,12 @@ jobs:
           docker buildx build --platform linux/arm64 -f Containerfile \
             -t "$IMAGE:arm64" --push .
 
+      # The package was pushed with the PAT, so the visibility PATCH must use
+      # the same token — GITHUB_TOKEN gets 404 on PAT-created packages.
       - name: Make package public
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
         run: |
           gh api --method PATCH \
             "/repos/${{ github.repository }}/packages/container/landir/visibility" \
