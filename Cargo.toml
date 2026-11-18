@@ -15,7 +15,7 @@ percent-encoding = "2"
 # TUI when attached to a terminal (pure Rust, musl-static friendly for the
 # distroless image); without a TTY the server falls back to plain log lines
 ratatui = "0.30"
-crossterm = "0.28"
+crossterm = "0.29"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
