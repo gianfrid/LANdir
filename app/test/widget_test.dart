@@ -1,4 +1,5 @@
-// Widget tests for the host view.
+// Widget tests for the default (Client) tab and the host view.
+// The phone layout opens on the Client tab by default.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,10 +15,22 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
   }
 
-  testWidgets('idle view shows start button and secret mode toggle',
+  testWidgets('app opens on the client tab', (tester) async {
+    usePhoneViewport(tester);
+    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+
+    // Client is the default tab: its empty state is visible without tapping.
+    expect(find.textContaining('No servers yet'), findsOneWidget);
+    expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
+  });
+
+  testWidgets('host tab shows start button and secret mode toggle',
       (tester) async {
     usePhoneViewport(tester);
     await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+
+    await tester.tap(find.text('Host'));
+    await tester.pump();
 
     expect(find.text('Start server'), findsOneWidget);
     expect(find.text('Secret URL mode'), findsOneWidget);
@@ -31,22 +44,13 @@ void main() {
     usePhoneViewport(tester);
     await tester.pumpWidget(const ProviderScope(child: LandirApp()));
 
+    await tester.tap(find.text('Host'));
+    await tester.pump();
+
     await tester.tap(find.byType(Switch));
     await tester.pump();
 
     final switchWidget = tester.widget<Switch>(find.byType(Switch));
     expect(switchWidget.value, isFalse);
-  });
-
-  testWidgets('client tab shows empty state with scan prompt', (tester) async {
-    usePhoneViewport(tester);
-    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
-
-    // Switch to Client tab
-    await tester.tap(find.text('Client'));
-    await tester.pump();
-
-    expect(find.textContaining('No servers yet'), findsOneWidget);
-    expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
   });
 }

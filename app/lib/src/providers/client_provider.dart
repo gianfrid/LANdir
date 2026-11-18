@@ -15,6 +15,7 @@ import '../core/share.dart';
 part 'client_provider.g.dart';
 
 const String _serversPrefsKey = 'landir_saved_servers';
+const String _lastServerPrefsKey = 'landir_last_server';
 
 /// A saved Landir server entry.
 class SavedServer {
@@ -120,19 +121,30 @@ class ClientController extends _$ClientController {
   ClientState build() => const ClientState();
 
   /// Load persisted servers from shared_preferences. Call once on app start.
+  /// If a server was selected the last time the app ran, reconnect to it.
   Future<void> loadPersisted() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_serversPrefsKey);
-    if (raw == null) return;
-    try {
-      final list = (jsonDecode(raw) as List<dynamic>)
-          .map((e) => SavedServer(
-                name: e['name'] as String,
-                baseUrl: e['baseUrl'] as String,
-              ))
-          .toList();
-      state = state.copyWith(servers: list);
-    } catch (_) {}
+    if (raw != null) {
+      try {
+        final list = (jsonDecode(raw) as List<dynamic>)
+            .map((e) => SavedServer(
+                  name: e['name'] as String,
+                  baseUrl: e['baseUrl'] as String,
+                ))
+            .toList();
+        state = state.copyWith(servers: list);
+      } catch (_) {}
+    }
+    final lastUrl = prefs.getString(_lastServerPrefsKey);
+    if (lastUrl == null) return;
+    final match = state.servers.where((s) => s.baseUrl == lastUrl).toList();
+    if (match.isNotEmpty) {
+      await selectServer(match.first);
+    } else {
+      // The saved server was removed while the app was closed.
+      await prefs.remove(_lastServerPrefsKey);
+    }
   }
 
   Future<void> _persistServers(List<SavedServer> servers) async {
@@ -195,10 +207,13 @@ class ClientController extends _$ClientController {
     _dropServer(baseUrl);
   }
 
-  /// Select a server and fetch its root listing.
+  /// Select a server and fetch its root listing. The selection is persisted
+  /// so the app reconnects to it on next start (see [loadPersisted]).
   Future<void> selectServer(SavedServer server) async {
     state = state.copyWith(
         current: server, currentPath: '', loading: true, error: null, files: []);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastServerPrefsKey, server.baseUrl);
     _client?.close();
     _client = LandirClient(server.baseUrl);
     try {
@@ -295,6 +310,9 @@ class ClientController extends _$ClientController {
   void _dropServer(String baseUrl, {String? error, String? removedUrl}) {
     final servers = state.servers.where((s) => s.baseUrl != baseUrl).toList();
     final wasCurrent = state.current?.baseUrl == baseUrl;
+    if (wasCurrent) {
+      SharedPreferences.getInstance().then((p) => p.remove(_lastServerPrefsKey));
+    }
     state = state.copyWith(
       servers: servers,
       clearCurrent: wasCurrent,

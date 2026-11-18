@@ -17,6 +17,7 @@ void main() {
   late ProviderContainer container;
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
     tmpDir = Directory.systemTemp.createTempSync('landir_nav_').path;
     Directory('$tmpDir/reports/2025').createSync(recursive: true);
     File('$tmpDir/reports/q3.txt').writeAsStringSync('q3');

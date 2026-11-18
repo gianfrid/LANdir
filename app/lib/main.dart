@@ -57,7 +57,9 @@ class _AdaptiveHome extends ConsumerStatefulWidget {
 }
 
 class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
-  int _tab = 0;
+  // Default to the Client tab on phones: most sessions are "upload to the
+  // server I was connected to", and loadPersisted() reconnects automatically.
+  int _tab = 1;
   StreamSubscription<List<SharedMediaFile>>? _shareSub;
 
   @override
