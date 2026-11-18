@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Landir</string>
+	<string>LANdir</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -33,7 +33,7 @@
 	<true/>
 	<!-- Local network access for the HTTP server -->
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Landir serves files to devices on your local network.</string>
+	<string>LANdir serves files to devices on your local network.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_http._tcp</string>

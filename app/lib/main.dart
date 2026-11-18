@@ -1,4 +1,4 @@
-// Landir app entry point. Adaptive layout: on wide (desktop) windows a
+// LANdir app entry point. Adaptive layout: on wide (desktop) windows a
 // segmented Host/Client toggle with a Downloads side panel; on narrow
 // (phone) screens, bottom-nav tabs.
 
@@ -40,7 +40,7 @@ class LandirApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Landir',
+      title: 'LANdir',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),

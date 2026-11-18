@@ -46,7 +46,7 @@ void main() {
     ));
 
     expect(find.textContaining('Camera permission is required'), findsOneWidget);
-    expect(find.textContaining('Settings > Apps > Landir'), findsOneWidget);
+    expect(find.textContaining('Settings > Apps > LANdir'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });
 

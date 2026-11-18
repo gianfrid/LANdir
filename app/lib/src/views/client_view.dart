@@ -73,7 +73,7 @@ class _ClientViewState extends ConsumerState<ClientView> {
                 padding: EdgeInsets.all(24),
                 child: Text(
                   'No servers yet.\nScan a QR code or add a URL to connect '
-                  'to a Landir server.',
+                  'to a LANdir server.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -130,7 +130,7 @@ class _ClientViewState extends ConsumerState<ClientView> {
         title: const Text('Address outside the local network'),
         content: Text(
           '${server.baseUrl} is not a private (LAN) address.\n\n'
-          'Landir is designed for local networks only. Adding a public '
+          'LANdir is designed for local networks only. Adding a public '
           'address is unusual: double-check that the QR code or URL is '
           'what you intended — anything you upload would be sent to it.',
         ),

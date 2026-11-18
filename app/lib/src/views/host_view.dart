@@ -32,7 +32,7 @@ class _HostViewState extends ConsumerState<HostView> {
     final state = ref.watch(serverControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Landir')),
+      appBar: AppBar(title: const Text('LANdir')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

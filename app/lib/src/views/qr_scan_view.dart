@@ -99,7 +99,7 @@ class ScanErrorView extends StatelessWidget {
         error.errorCode == MobileScannerErrorCode.permissionDenied;
     final message = denied
         ? 'Camera permission is required to scan a QR code.\n\n'
-            'Grant it in Settings > Apps > Landir > Permissions, then retry.'
+            'Grant it in Settings > Apps > LANdir > Permissions, then retry.'
         : 'Could not start the camera.\n\n${error.errorDetails?.message ?? error.errorCode.message}';
     return Center(
       child: Padding(

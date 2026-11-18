@@ -152,7 +152,7 @@ class ServerController extends _$ServerController {
 
   Future<void> _startForegroundService(int port) async {
     await FlutterForegroundTask.startService(
-      notificationTitle: 'Landir is serving',
+      notificationTitle: 'LANdir is serving',
       notificationText: 'Port $port — tap to open',
       callback: _foregroundCallback,
     );
@@ -163,7 +163,7 @@ class ServerController extends _$ServerController {
     // The server itself runs in the main isolate; this callback just keeps
     // the Android foreground service alive while the server is up.
     FlutterForegroundTask.updateService(
-      notificationTitle: 'Landir is serving',
+      notificationTitle: 'LANdir is serving',
       notificationText: 'Receiving files on the local network',
     );
   }

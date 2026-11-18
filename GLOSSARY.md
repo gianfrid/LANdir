@@ -5,6 +5,16 @@ directory: a device hosts a small HTTP server and other devices on the same
 network use it — from any web browser — to upload files (which land in a
 local directory) and to download them again.
 
+## Naming
+
+**LANdir**:
+The user-facing product name, shown in app strings, notifications, platform launchers (Android label, iOS display name, desktop window title), and the served page's browser tab.
+_Avoid_: Landir (in user-visible strings).
+
+**Landir**:
+The project name everywhere the user isn't looking: documentation, code identifiers, and package ids.
+_Avoid_: LANdir (in docs, code, and identifiers).
+
 ## Roles
 
 **Host**:
@@ -34,6 +44,10 @@ _Avoid_: Test data, fixtures (too generic).
 **Advertised URL**:
 The URL clients are told to open: printed at startup and encoded in the QR code.
 _Avoid_: Public URL, external URL (implies internet-facing, which Landir is not).
+
+**Requested port**:
+The port a Host's user chose for the next start; 0 delegates the choice to the host, which picks a free dynamic-range port itself.
+_Avoid_: Server port, port setting.
 
 **Bound port**:
 The port the process actually listens on.
