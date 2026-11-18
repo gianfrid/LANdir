@@ -136,7 +136,7 @@ jobs:
           sleep 2
           podman logs landir-smoke | grep -q "Open http://127.0.0.1:18080/"
           url=$(podman logs landir-smoke | grep -o 'Open http://[^ ]*' | sed 's/^Open //')
-          curl -fsS "$url" | grep -q "<title>Landir</title>"
+          curl -fsS "$url" | grep -q "<title>LANdir</title>"
           podman kill -s INT landir-smoke
           sleep 1
           podman ps -a --filter name=landir-smoke --format '{{.Status}}' | grep -q "Exited (0)"
