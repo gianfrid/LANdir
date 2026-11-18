@@ -45,6 +45,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
         run: |
+          # PAT-pushed packages live under the user namespace and may not be
+          # linked to the repo, so the repo-scoped endpoint can 404 — fall
+          # back to the user-scoped one.
           gh api --method PATCH \
             "/repos/${{ github.repository }}/packages/container/landir/visibility" \
+            -f visibility=public \
+          || gh api --method PATCH \
+            "/user/packages/container/landir/visibility" \
             -f visibility=public
