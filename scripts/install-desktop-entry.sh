@@ -67,5 +67,14 @@ EOF
 # watches the directory, so this is best-effort).
 update-desktop-database "$DATA_DIR/applications" 2>/dev/null || true
 
+# Refresh the icon-theme cache: an existing icon-theme.cache makes GTK (and
+# GNOME Shell) skip directory scans entirely, so icons installed after the
+# cache was last built are invisible without this refresh.
+if command -v gtk-update-icon-cache >/dev/null; then
+  gtk-update-icon-cache -q -f -t "$DATA_DIR/icons/hicolor"
+else
+  rm -f "$DATA_DIR/icons/hicolor/icon-theme.cache"
+fi
+
 echo "installed ${APP_ID}.desktop (Exec=$APP_IMAGE)"
 echo "launch from the app grid, or run the AppImage directly — the dock icon resolves either way"

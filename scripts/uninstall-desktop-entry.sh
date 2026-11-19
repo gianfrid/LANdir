@@ -17,6 +17,13 @@ for icon in "$DATA_DIR"/icons/hicolor/*/apps/${ICON_NAME}.png; do
   count=$((count + 1))
 done
 update-desktop-database "$DATA_DIR/applications" 2>/dev/null || true
+# Refresh the icon-theme cache so the removed icons stop being served from
+# a stale cache (same reason as the installer refreshes it).
+if command -v gtk-update-icon-cache >/dev/null; then
+  gtk-update-icon-cache -q -f -t "$DATA_DIR/icons/hicolor"
+else
+  rm -f "$DATA_DIR/icons/hicolor/icon-theme.cache"
+fi
 
 if [ "$count" -eq 0 ] && [ ! -f "$DATA_DIR/applications/${APP_ID}.desktop" ]; then
   echo "nothing to uninstall (${APP_ID} was not installed)"
