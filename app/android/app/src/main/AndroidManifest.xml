@@ -40,7 +40,7 @@
             </intent-filter>
             <!-- Share sheet: accept any file (and text) shared from other
                  apps. MainActivity.kt reads the intent from onNewIntent/
-                 onCreate and copies the streams into the app cache -->
+                 onCreate and copies the streams into the app cache. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -50,6 +50,17 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="*/*"/>
+            </intent-filter>
+            <!-- Some apps share files (archives included) with no MIME type
+                 at all; a filter that declares a mimeType can never match
+                 those, so repeat both actions without a <data> element. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
         <!-- Foreground service for background hosting (flutter_foreground_task) -->
