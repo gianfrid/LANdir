@@ -39,7 +39,8 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
             <!-- Share sheet: accept any file (and text) shared from other
-                 apps. The plugin reads the intent from onNewIntent/onCreate. -->
+                 apps. MainActivity.kt reads the intent from onNewIntent/
+                 onCreate and copies the streams into the app cache -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
                 <category android:name="android.intent.category.DEFAULT"/>

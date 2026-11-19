@@ -6,8 +6,9 @@ plugins {
 
 android {
     namespace = "gianfrid.landir"
-    // Pinned to 37 (not flutter.compileSdkVersion = 36): receive_sharing_intent
-    // requires it. AGP 9.1.0 recommends 36 but accepts 37.
+    // Pinned to 37 (not flutter.compileSdkVersion = 36, which AGP 9.1.0
+    // recommends): an earlier dependency required it, and release/
+    // AppImage CI is verified against it. 36 would also satisfy AGP.
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 

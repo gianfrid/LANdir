@@ -24,11 +24,3 @@ class IncomingShare {
 
   bool get isText => text != null;
 }
-
-/// Extract the file name from a share-sheet file path. Handles both
-/// separator styles; falls back to a generic name when the path has none.
-String filenameFromSharePath(String path) {
-  final name = path.replaceAll('\\', '/').split('/').where((s) => s.isNotEmpty).lastOrNull;
-  if (name == null || name.isEmpty) return 'shared-file';
-  return name;
-}

@@ -253,9 +253,12 @@ class ClientController extends _$ClientController {
 
   /// Upload a batch of shares to the current server, one by one. Per-file
   /// errors are counted, not fatal: one unreadable share must not block the
-  /// rest of the batch.
+  /// rest of the batch. Each failure is included in the error message so a
+  /// silently skipped file (e.g. a share the platform could not open) is
+  /// visible instead of lost.
   Future<void> _uploadShares(List<IncomingShare> shares) async {
     var ok = 0;
+    final failures = <String>[];
     for (final share in shares) {
       try {
         final Uint8List bytes;
@@ -264,14 +267,20 @@ class ClientController extends _$ClientController {
         } else {
           bytes = await File(share.filePath!).readAsBytes();
         }
-        if (await uploadFile(share.filename, bytes)) ok++;
-      } catch (_) {
+        if (await uploadFile(share.filename, bytes)) {
+          ok++;
+        } else {
+          failures.add('${share.filename}: server rejected the upload');
+        }
+      } catch (e) {
+        failures.add('${share.filename}: $e');
         state = state.copyWith(loading: false);
       }
     }
     if (ok < shares.length) {
+      final detail = failures.isEmpty ? '' : ' (${failures.join('; ')})';
       state = state.copyWith(
-          error: 'Uploaded $ok of ${shares.length} shared item(s)');
+          error: 'Uploaded $ok of ${shares.length} shared item(s)$detail');
     }
   }
 

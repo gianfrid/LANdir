@@ -6,8 +6,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import 'src/platform/share_intent.dart';
 import 'src/providers/client_provider.dart';
@@ -69,22 +69,27 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
   // When true (default) the desktop Downloads frame hides itself while
   // the download list is empty; the toolbar toggle pins it open.
   bool _autoHideDownloads = true;
-  StreamSubscription<List<SharedMediaFile>>? _shareSub;
+  StreamSubscription<String>? _shareSub;
+
+  static const MethodChannel _shareMethods =
+      MethodChannel('landir/share_intent');
+  static const EventChannel _shareEvents =
+      EventChannel('landir/share_intent/events');
 
   @override
   void initState() {
     super.initState();
-    // Share intents only exist on Android/iOS; the plugin has no desktop
-    // implementation and throws MissingPluginException there.
-    if (!Platform.isAndroid && !Platform.isIOS) return;
+    // The share-intake channels exist only on Android; elsewhere they
+    // would throw MissingPluginException.
+    if (!Platform.isAndroid) return;
     // Shares arriving while the app is running.
-    _shareSub = ReceiveSharingIntent.instance
-        .getMediaStream()
-        .listen(_handleSharedMedia);
+    _shareSub = _shareEvents
+        .receiveBroadcastStream()
+        .map((payload) => payload as String)
+        .listen(_handleSharePayload);
     // Share that launched the app from a closed state.
-    ReceiveSharingIntent.instance.getInitialMedia().then((media) {
-      ReceiveSharingIntent.instance.reset();
-      _handleSharedMedia(media);
+    _shareMethods.invokeMethod<String>('getInitialShares').then((payload) {
+      if (payload != null) _handleSharePayload(payload);
     });
   }
 
@@ -94,8 +99,8 @@ class _AdaptiveHomeState extends ConsumerState<_AdaptiveHome> {
     super.dispose();
   }
 
-  void _handleSharedMedia(List<SharedMediaFile> media) {
-    final shares = incomingSharesFromMedia(media);
+  void _handleSharePayload(String payload) {
+    final shares = incomingSharesFromPayload(payload);
     if (shares.isEmpty) return;
     ref.read(clientControllerProvider.notifier).receiveShares(shares);
     // Bring the client forward so the user sees the upload happen.

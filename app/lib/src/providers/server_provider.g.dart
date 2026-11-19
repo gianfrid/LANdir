@@ -45,7 +45,7 @@ final class FileSinkProvider
   }
 }
 
-String _$fileSinkHash() => r'15b80f0094e468dc4210079b07475f276bbacfcc';
+String _$fileSinkHash() => r'5c890b9f46d17ef8a69bd33de516752d74fa9b41';
 
 /// The running LandirServer instance (kept alive while running).
 
@@ -83,7 +83,7 @@ final class ServerControllerProvider
   }
 }
 
-String _$serverControllerHash() => r'02357852e4e924ab69d69ec758194a6c6af8d6a7';
+String _$serverControllerHash() => r'f6eeea08bc60d79ee9c2561a6bd915f291ba0b06';
 
 /// The running LandirServer instance (kept alive while running).
 
