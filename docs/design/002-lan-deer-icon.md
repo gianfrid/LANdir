@@ -3,24 +3,29 @@
 Status: **adopted** — this is the official LANdir app icon (asset +
 all platform launcher icons).
 
-> Small-size note: the file-node dots and the folder are deliberately
-> oversized (r=34 tips, ~118-unit folder) so the directory tree still
-> reads at launcher sizes. Down to roughly 48px the antlers read as
-> tree branches with green tips and a folder; below that it reduces
-> to a deer silhouette, like any flat icon.
+> Small-size note: the antler-tip content is deliberately oversized.
+> The right antler carries a directory folder (~180 units wide) and the
+> left one a photo card (mountain + sun, ~150 units); both are lifted
+> slightly above the upper tine tips so the mid-tip green file-nodes on
+> the lower tines still read at launcher sizes. Down to roughly 48px
+> the tree reads as branches holding a folder and a photo; below that
+> it reduces to a deer silhouette, like any flat icon.
 
 ## The idea
 
 "LANdir" is a near-exact homophone of **LAN-deer**. The mascot is a
 goofy reindeer whose antlers fork exactly like a **directory tree**:
-every tine tip carries a green file-node (the accent green of the web
-drop-zone, `#4caf50`), and one tine ends in a small folder — the "dir"
-half of the name, drawn.
+the tine tips carry green file-nodes (the accent green of the web
+drop-zone, `#4caf50`), the upper tips end in a directory folder and a
+photo card — the "dir" half of the name, drawn, along with what a LAN
+directory actually holds.
 
 Why it hangs together beyond the pun:
 
-- Antlers *are* forking trees — the standard "expand a directory"
-  glyph — and each tip doubles as a device on the LAN.
+- Every tine tip carries content — a green file-node, and on the upper
+  tips: a directory folder (right) and a photo card (left) — so both
+  halves of the name are drawn: the *dir* as the folder, the things a
+  *LAN directory* holds (files) riding the antlers.
 - Santa's reindeer are the original overnight file-delivery fleet.
 - The derp (one big eye, pupils askew, tongue out) keeps the tone of
   a tool you point at your friends' phones, not an enterprise suite.

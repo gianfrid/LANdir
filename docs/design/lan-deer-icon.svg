@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <!-- LAN-deer: goofy reindeer whose antlers fork like a directory tree.
-       Green tips = files; the folder on one tine spells out "dir".
        Palette matches the LANdir web page: dark drop-zone green bg,
-       #4caf50 accent. Nodes/folder are oversized so the "directory tree"
-       still reads at launcher sizes (48px+). -->
+       #4caf50 accent. The antler tips carry content: a directory folder
+       on the right, a photo on the left, green file-nodes on the lower
+       tines. The folder/photo are oversized and lifted above the tips
+       so the mid-tip dots still read at launcher sizes (48px+). -->
 
   <defs>
     <g id="lantler">
@@ -17,6 +18,9 @@
       <path d="M 373 316 C 355 285 330 250 302 216"
             fill="none" stroke="#8a5a33" stroke-width="52" stroke-linecap="round"/>
     </g>
+    <clipPath id="photo-card">
+      <rect x="212" y="112" width="150" height="126" rx="20"/>
+    </clipPath>
   </defs>
 
   <!-- Rounded-square badge, drop-zone green -->
@@ -36,12 +40,9 @@
   <use href="#lantler" x="0" y="0"/>
   <use href="#lantler" transform="translate(1024,0) scale(-1,1)"/>
 
-  <!-- Left tips: green file-nodes on the dir tree -->
+  <!-- Green file-nodes on the sticking-out tine tips -->
   <circle cx="350" cy="260" r="34" fill="#4caf50"/>
   <circle cx="310" cy="300" r="34" fill="#4caf50"/>
-  <circle cx="300" cy="212" r="34" fill="#4caf50"/>
-
-  <!-- Right tips: mirrored nodes, the top one is a folder -->
   <circle cx="674" cy="260" r="34" fill="#4caf50"/>
   <circle cx="712" cy="304" r="34" fill="#4caf50"/>
 
@@ -69,8 +70,18 @@
   <path d="M 512 752 L 512 806" stroke="#e76a7d" stroke-width="8"
         stroke-linecap="round" fill="none"/>
 
-  <!-- The "dir": a folder perched on the right antler tip -->
-  <path d="M 668 152 h 38 l 17 17 h 32 a 15 15 0 0 1 15 15 v 61
-           a 15 15 0 0 1 -15 15 h -87 a 15 15 0 0 1 -15 -15 v -78
-           a 15 15 0 0 1 15 -15 z"
-        fill="#f6a63c" stroke="#a86416" stroke-width="11"/>
+  <!-- Left antler tip: a photo ("files live up here") -->
+  <rect x="212" y="112" width="150" height="126" rx="20"
+        fill="#f7ead0" stroke="#6b5335" stroke-width="10"/>
+  <g clip-path="url(#photo-card)">
+    <path d="M 228 232 L 266 172 L 288 200 L 312 168 L 346 232 Z"
+          fill="#4caf50"/>
+    <circle cx="342" cy="138" r="13" fill="#ffd54f"/>
+  </g>
+
+  <!-- Right antler tip: the directory the "LAN-deer" watches over -->
+  <path d="M 668 98 h 62 l 20 20 h 44 a 18 18 0 0 1 18 18 v 80
+           a 18 18 0 0 1 -18 18 h -144 a 18 18 0 0 1 -18 -18 v -100
+           a 18 18 0 0 1 18 -18 z"
+        fill="#f6a63c" stroke="#a86416" stroke-width="12"/>
+</svg>
