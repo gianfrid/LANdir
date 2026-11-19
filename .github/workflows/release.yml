@@ -1,7 +1,7 @@
-# On a v* tag: build the release APK and attach it to a GitHub Release, so
-# it is publicly downloadable without a login (run artifacts expire and are
-# login-walled). alpha/beta/rc tags become prereleases; anything else is a
-# full release.
+# On a v* tag: build the release APK and Linux AppImage and attach them to
+# a GitHub Release, so they are publicly downloadable without a login (run
+# artifacts expire and are login-walled). alpha/beta/rc tags become
+# prereleases; anything else is a full release.
 #
 # Tag builds are signed with the release key (secrets ANDROID_KEYSTORE_*);
 # a missing secret fails the build rather than silently publishing a
@@ -21,9 +21,9 @@ on:
 
 # Container images are published by rolling.yml (amd64 on every push) and
 # arm64-monthly.yml (arm64, monthly schedule); this workflow only handles
-# the versioned APK release.
+# the versioned APK and AppImage releases.
 permissions:
-  contents: write # create the release and upload the APK
+  contents: write # create the release and upload the APK and AppImage
 
 jobs:
   release:
@@ -89,3 +89,84 @@ jobs:
           if [[ "$TAG" =~ (alpha|beta|rc) ]]; then flags+=(--prerelease); fi
           gh release create "$TAG" "${flags[@]}" --generate-notes "$APK" \
             || gh release upload "$TAG" "$APK" --clobber
+
+  # Linux desktop AppImage for the same v* tags. The release job may finish
+  # first and create the release; both attach steps race-create with an
+  # upload fallback, so either order ends up with both assets.
+  #
+  # The AppImage recipe is duplicated in rolling.yml on purpose — same rule
+  # as the APK build above.
+  appimage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Flutter's Linux runner links GTK3; the headers and ninja are not on
+      # the runner image (clang/cmake/pkg-config are).
+      - name: Linux desktop build deps
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+          cache: true
+
+      - name: Fetch packages
+        working-directory: app
+        run: flutter pub get
+
+      - name: Build Linux bundle
+        working-directory: app
+        run: flutter build linux --release
+
+      # The bundle's runner resolves lib/ and data/ relative to the
+      # executable, so the whole bundle lives under usr/bin — linuxdeploy's
+      # usual usr/bin + usr/lib split would break it.
+      - name: Assemble AppDir
+        run: |
+          BUNDLE=app/build/linux/x64/release/bundle
+          install -d AppDir/usr/bin
+          cp -r "$BUNDLE"/* AppDir/usr/bin/
+          cp app/assets/icon.png AppDir/.DirIcon
+          cp app/assets/icon.png AppDir/landir.png
+          cat > AppDir/landir.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Landir
+          Exec=landir_app
+          Icon=landir
+          Categories=Network;
+          EOF
+
+      - name: Download appimagetool
+        # appimagetool has no usable stable release (the 1.9.x tags are the
+        # in-progress rewrite); the continuous build is the supported tool.
+        run: |
+          wget -qO appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+
+      - name: Build AppImage
+        env:
+          # Runners ship no usable FUSE; extract-and-run makes AppImage
+          # tools self-extract instead of mounting.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          printf '%s\n' '#!/bin/sh' \
+            'exec "$(dirname "$(readlink -f "$0")")/usr/bin/landir_app" "$@"' \
+            > AppDir/AppRun
+          chmod +x AppDir/AppRun
+          ARCH=x86_64 ./appimagetool AppDir landir-x86_64.AppImage
+
+      # Same tag-refs-only rule as the APK attach step.
+      - name: Attach AppImage to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          APPIMG=landir-x86_64.AppImage
+          flags=()
+          if [[ "$TAG" =~ (alpha|beta|rc) ]]; then flags+=(--prerelease); fi
+          gh release create "$TAG" "${flags[@]}" --generate-notes "$APPIMG" \
+            || gh release upload "$TAG" "$APPIMG" --clobber

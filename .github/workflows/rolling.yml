@@ -1,19 +1,22 @@
-# Rolling builds: on every push to slop, build the signed APK and the
-# container image and publish them under fixed, replaceable names so the
-# previous rolling build is superseded:
+# Rolling builds: on every push to slop, build the signed APK, the Linux
+# AppImage and the container image and publish them under fixed, replaceable
+# names so the previous rolling build is superseded:
 #
 #   - APK: attached to the persistent "rolling" GitHub Release as
 #     landir-arm64.apk (asset clobbered on each run). Obtanium pointed at
 #     this repo picks it up as the latest (non-prerelease) release.
+#   - AppImage: attached to the same rolling release as
+#     landir-x86_64.AppImage (asset clobbered on each run).
 #   - Image: pushed to ghcr.io/<owner>/landir:latest and :rolling, so
 #     `podman pull ghcr.io/gianfrid/landir:latest` always gets the newest
 #     build.
 #
-# Versioned v* tags still go through release.yml (signed APK on a versioned
-# release + versioned image tags); this workflow only handles the rolling
-# channel. The APK build mirrors release.yml on purpose, including the
+# Versioned v* tags still go through release.yml (signed APK and AppImage on
+# a versioned release); this workflow only handles the rolling channel. The
+# APK build mirrors release.yml on purpose, including the
 # fail-fast secrets check: a rolling build must never silently fall back to
-# a debug-signed APK that users would install over the signed one.
+# a debug-signed APK that users would install over the signed one. The
+# AppImage build mirrors release.yml as well, for the same reason.
 name: Rolling
 
 on:
@@ -91,8 +94,93 @@ jobs:
             gh release upload rolling /tmp/landir-arm64.apk --clobber
           else
             gh release create rolling --title "Rolling build (latest)" \
-              --notes "Automated rolling build of the \`slop\` branch. The APK asset is replaced on every push; versioned releases live under the v* tags." \
+              --notes "Automated rolling build of the \`slop\` branch. The APK and AppImage assets are replaced on every push; versioned releases live under the v* tags." \
               /tmp/landir-arm64.apk
+          fi
+
+  # Linux desktop AppImage for the rolling channel; mirrors release.yml's
+  # appimage job (duplicated on purpose, same rule as the APK build above).
+  appimage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Flutter's Linux runner links GTK3; the headers and ninja are not on
+      # the runner image (clang/cmake/pkg-config are).
+      - name: Linux desktop build deps
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+          cache: true
+
+      - name: Fetch packages
+        working-directory: app
+        run: flutter pub get
+
+      - name: Build Linux bundle
+        working-directory: app
+        run: flutter build linux --release
+
+      # The bundle's runner resolves lib/ and data/ relative to the
+      # executable, so the whole bundle lives under usr/bin — linuxdeploy's
+      # usual usr/bin + usr/lib split would break it.
+      - name: Assemble AppDir
+        run: |
+          BUNDLE=app/build/linux/x64/release/bundle
+          install -d AppDir/usr/bin
+          cp -r "$BUNDLE"/* AppDir/usr/bin/
+          cp app/assets/icon.png AppDir/.DirIcon
+          cp app/assets/icon.png AppDir/landir.png
+          cat > AppDir/landir.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Landir
+          Exec=landir_app
+          Icon=landir
+          Categories=Network;
+          EOF
+
+      - name: Download appimagetool
+        # appimagetool has no usable stable release (the 1.9.x tags are the
+        # in-progress rewrite); the continuous build is the supported tool.
+        run: |
+          wget -qO appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+
+      - name: Build AppImage
+        env:
+          # Runners ship no usable FUSE; extract-and-run makes AppImage
+          # tools self-extract instead of mounting.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          printf '%s\n' '#!/bin/sh' \
+            'exec "$(dirname "$(readlink -f "$0")")/usr/bin/landir_app" "$@"' \
+            > AppDir/AppRun
+          chmod +x AppDir/AppRun
+          ARCH=x86_64 ./appimagetool AppDir landir-x86_64.AppImage
+
+      - name: Publish rolling AppImage to the rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp landir-x86_64.AppImage /tmp/landir-x86_64.AppImage
+          # Keep the rolling release pointing at the commit being built.
+          # The apk job does the same move; both point at HEAD, so the
+          # duplicate force-push is idempotent and keeps this job
+          # self-contained if the apk job fails.
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag -f rolling HEAD
+          git push --force origin rolling
+          if gh release view rolling >/dev/null 2>&1; then
+            gh release upload rolling /tmp/landir-x86_64.AppImage --clobber
+          else
+            gh release create rolling --title "Rolling build (latest)" \
+              --notes "Automated rolling build of the \`slop\` branch. The APK and AppImage assets are replaced on every push; versioned releases live under the v* tags." \
+              /tmp/landir-x86_64.AppImage
           fi
 
   # amd64 image only; the arm64 image is built by the monthly scheduled
