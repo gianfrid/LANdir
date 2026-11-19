@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- LAN-deer: goofy reindeer whose antlers fork like a directory tree.
+       Green tips = files; the folder on one tine spells out "dir".
+       Palette matches the LANdir web page: dark drop-zone green bg,
+       #4caf50 accent. Nodes/folder are oversized so the "directory tree"
+       still reads at launcher sizes (48px+). -->
+
+  <defs>
+    <g id="lantler">
+      <!-- Main beam -->
+      <path d="M 460 430 C 410 370 370 330 350 260"
+            fill="none" stroke="#8a5a33" stroke-width="62" stroke-linecap="round"/>
+      <!-- Lower tine (forks off the beam at ~405,365) -->
+      <path d="M 405 365 C 380 345 348 328 312 304"
+            fill="none" stroke="#8a5a33" stroke-width="52" stroke-linecap="round"/>
+      <!-- Upper tine (forks off the beam at ~373,316) -->
+      <path d="M 373 316 C 355 285 330 250 302 216"
+            fill="none" stroke="#8a5a33" stroke-width="52" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <!-- Rounded-square badge, drop-zone green -->
+  <rect x="0" y="0" width="1024" height="1024" rx="240" fill="#1e2a1e"/>
+
+  <!-- Ears (floppy, behind everything) -->
+  <ellipse cx="330" cy="505" rx="78" ry="42" fill="#8a5a33"
+           transform="rotate(-30 330 505)"/>
+  <ellipse cx="330" cy="505" rx="52" ry="24" fill="#d29a5b"
+           transform="rotate(-30 330 505)"/>
+  <ellipse cx="694" cy="505" rx="78" ry="42" fill="#8a5a33"
+           transform="rotate(30 694 505)"/>
+  <ellipse cx="694" cy="505" rx="52" ry="24" fill="#d29a5b"
+           transform="rotate(30 694 505)"/>
+
+  <!-- Antlers: directory-tree branches -->
+  <use href="#lantler" x="0" y="0"/>
+  <use href="#lantler" transform="translate(1024,0) scale(-1,1)"/>
+
+  <!-- Left tips: green file-nodes on the dir tree -->
+  <circle cx="350" cy="260" r="34" fill="#4caf50"/>
+  <circle cx="310" cy="300" r="34" fill="#4caf50"/>
+  <circle cx="300" cy="212" r="34" fill="#4caf50"/>
+
+  <!-- Right tips: mirrored nodes, the top one is a folder -->
+  <circle cx="674" cy="260" r="34" fill="#4caf50"/>
+  <circle cx="712" cy="304" r="34" fill="#4caf50"/>
+
+  <!-- Head -->
+  <ellipse cx="512" cy="590" rx="205" ry="185" fill="#e6b877"/>
+
+  <!-- Blush -->
+  <circle cx="395" cy="638" r="34" fill="#ff9e6b" opacity="0.45"/>
+  <circle cx="629" cy="638" r="34" fill="#ff9e6b" opacity="0.45"/>
+
+  <!-- Goofy eyes: unequal size, pupils pointing a bit apart -->
+  <circle cx="440" cy="548" r="62" fill="#ffffff"/>
+  <circle cx="584" cy="548" r="50" fill="#ffffff"/>
+  <circle cx="452" cy="556" r="24" fill="#2b2620"/>
+  <circle cx="572" cy="540" r="20" fill="#2b2620"/>
+  <circle cx="460" cy="548" r="8" fill="#ffffff"/>
+  <circle cx="579" cy="533" r="7" fill="#ffffff"/>
+
+  <!-- Muzzle -->
+  <ellipse cx="512" cy="700" rx="132" ry="102" fill="#f7ead0"/>
+  <ellipse cx="512" cy="652" rx="48" ry="36" fill="#3a2a1d"/>
+
+  <!-- Tongue out -->
+  <ellipse cx="512" cy="782" rx="42" ry="34" fill="#ff8f9e"/>
+  <path d="M 512 752 L 512 806" stroke="#e76a7d" stroke-width="8"
+        stroke-linecap="round" fill="none"/>
+
+  <!-- The "dir": a folder perched on the right antler tip -->
+  <path d="M 668 152 h 38 l 17 17 h 32 a 15 15 0 0 1 15 15 v 61
+           a 15 15 0 0 1 -15 15 h -87 a 15 15 0 0 1 -15 -15 v -78
+           a 15 15 0 0 1 15 -15 z"
+        fill="#f6a63c" stroke="#a86416" stroke-width="11"/>
