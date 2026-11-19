@@ -32,6 +32,10 @@ class ServerState {
   final String? error;
   final String? hotspotSsid;
 
+  /// Where received files are saved (desktop only). Null means the
+  /// default location (the Documents directory).
+  final String? saveDir;
+
   const ServerState({
     this.running = false,
     this.port,
@@ -41,6 +45,7 @@ class ServerState {
     this.insecure = false,
     this.error,
     this.hotspotSsid,
+    this.saveDir,
   });
 
   ServerState copyWith({
@@ -53,6 +58,7 @@ class ServerState {
     // Null clears the error, so a sentinel marks "argument not given".
     Object? error = _unsetError,
     String? hotspotSsid,
+    String? saveDir,
   }) =>
       ServerState(
         running: running ?? this.running,
@@ -65,13 +71,30 @@ class ServerState {
             ? this.error
             : error as String?,
         hotspotSsid: hotspotSsid ?? this.hotspotSsid,
+        saveDir: saveDir ?? this.saveDir,
       );
 }
+
+/// Whether the user can choose the Save directory. Android writes through
+/// MediaStore (fixed), and iOS must keep the app Documents directory so
+/// received files appear in the Files app — only desktop has a choice.
+bool get canChooseSaveDir => !Platform.isAndroid && !Platform.isIOS;
+
+const String _saveDirPrefsKey = 'save_dir';
 
 /// Picks the FileSink for the current platform.
 @riverpod
 Future<FileSink> fileSink(Ref ref) async {
   if (Platform.isAndroid) return MediaStoreFileSink();
+  // Desktop: honor the user's chosen Save directory if one is persisted;
+  // iOS keeps the app Documents directory (Files-app visibility).
+  if (canChooseSaveDir) {
+    final prefs = await SharedPreferences.getInstance();
+    final custom = prefs.getString(_saveDirPrefsKey);
+    if (custom != null && custom.isNotEmpty) {
+      return DocumentsFileSink.withRootDir(custom);
+    }
+  }
   return DocumentsFileSink.create();
 }
 
@@ -145,9 +168,12 @@ class ServerController extends _$ServerController {
     if (Platform.isAndroid) {
       await FlutterForegroundTask.stopService();
     }
-    // Keep the user's port choice (and the error) out of the reset: the
-    // port is a preference, not runtime state.
-    state = ServerState(requestedPort: state.requestedPort);
+    // Keep the user's port and Save directory choices (and the error)
+    // out of the reset: they are preferences, not runtime state.
+    state = ServerState(
+      requestedPort: state.requestedPort,
+      saveDir: state.saveDir,
+    );
   }
 
   Future<void> _startForegroundService(int port) async {
@@ -190,14 +216,44 @@ class ServerController extends _$ServerController {
     await prefs.setInt(_requestedPortPrefsKey, port);
   }
 
-  /// Restores the persisted port choice if the app starts fresh (the
-  /// host view calls this once on creation, mirroring the client view).
-  Future<void> loadPersistedPort() async {
+  /// Select the directory received files are saved into (desktop only).
+  /// Null clears the choice and returns to the default Documents
+  /// directory. Only changeable while stopped; persists across app
+  /// restarts like the port.
+  void setSaveDir(String? dir) {
+    if (state.running) return;
+    final normalized = (dir == null || dir.isEmpty) ? null : dir;
+    // A fresh ServerState rather than copyWith: null means "argument not
+    // given" there, but here it clears the choice.
+    state = ServerState(
+      requestedPort: state.requestedPort,
+      insecure: state.insecure,
+      saveDir: normalized,
+    );
+    unawaited(_saveSaveDir(normalized));
+  }
+
+  Future<void> _saveSaveDir(String? dir) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (dir == null) {
+      await prefs.remove(_saveDirPrefsKey);
+    } else {
+      await prefs.setString(_saveDirPrefsKey, dir);
+    }
+  }
+
+  /// Restores the persisted choices if the app starts fresh (the host
+  /// view calls this once on creation, mirroring the client view).
+  Future<void> loadPersistedSettings() async {
     if (state.running) return;
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getInt(_requestedPortPrefsKey);
-    if (saved != null && ServerConfig.isValidPort(saved)) {
-      state = state.copyWith(requestedPort: saved);
+    final savedPort = prefs.getInt(_requestedPortPrefsKey);
+    if (savedPort != null && ServerConfig.isValidPort(savedPort)) {
+      state = state.copyWith(requestedPort: savedPort);
+    }
+    final savedDir = prefs.getString(_saveDirPrefsKey);
+    if (savedDir != null && savedDir.isNotEmpty) {
+      state = state.copyWith(saveDir: savedDir);
     }
   }
 

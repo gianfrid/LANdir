@@ -42,6 +42,15 @@ void main() {
 
     expect(find.text('Start server'), findsOneWidget);
     expect(find.text('Secret URL mode'), findsOneWidget);
+    // The Save directory picker appears with the default location when a
+    // choice is possible (desktop host platform) or not at all otherwise.
+    if (canChooseSaveDir) {
+      expect(find.text('Save files to'), findsOneWidget);
+      expect(find.text('Documents folder'), findsOneWidget);
+      expect(find.byIcon(Icons.folder_open), findsOneWidget);
+    } else {
+      expect(find.text('Save files to'), findsNothing);
+    }
     expect(find.byType(Switch), findsOneWidget);
     // Secret mode is on by default: switch is on
     final switchWidget = tester.widget<Switch>(find.byType(Switch));

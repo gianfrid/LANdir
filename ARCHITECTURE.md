@@ -66,8 +66,11 @@ One Flutter/Dart codebase for Android, iOS, and Linux desktop (see
   toggle pins it open); bottom-nav tabs on phone.
 - **Platform channels** (`app/lib/src/platform/`): `MediaStoreFileSink`
   writes to `MediaStore.Downloads` on Android (Kotlin in `MainActivity.kt`);
-  `DocumentsFileSink` uses the app Documents directory on iOS; hotspot via
-  `LocalOnlyHotspot` on Android API 30+.
+  `DocumentsFileSink` uses the app Documents directory on iOS; on desktop
+  the host view lets the user pick the Save directory (a folder chooser via
+  `file_picker`, persisted with `shared_preferences` — null means the
+  default Documents directory); hotspot via `LocalOnlyHotspot` on Android
+  API 30+.
 
 ## See Also
 

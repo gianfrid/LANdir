@@ -86,20 +86,20 @@ void main() {
     expect(prefs.getInt('requested_port'), 9100);
   });
 
-  test('loadPersistedPort restores a saved choice', () async {
+  test('loadPersistedSettings restores a saved choice', () async {
     SharedPreferences.setMockInitialValues({'requested_port': 9001});
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    await notifierOf(container).loadPersistedPort();
+    await notifierOf(container).loadPersistedSettings();
     expect(
         container.read(serverControllerProvider).requestedPort, 9001);
   });
 
-  test('loadPersistedPort ignores a corrupt stored value', () async {
+  test('loadPersistedSettings ignores a corrupt stored value', () async {
     SharedPreferences.setMockInitialValues({'requested_port': 70000});
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    await notifierOf(container).loadPersistedPort();
+    await notifierOf(container).loadPersistedSettings();
     expect(
         container.read(serverControllerProvider).requestedPort, 8000);
   });

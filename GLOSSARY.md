@@ -49,6 +49,10 @@ _Avoid_: Public URL, external URL (implies internet-facing, which Landir is not)
 The port a Host's user chose for the next start; 0 delegates the choice to the host, which picks a free dynamic-range port itself.
 _Avoid_: Server port, port setting.
 
+**Save directory**:
+The directory the desktop app writes received files into; chosen with a folder picker, persisted across restarts, and null-clearable back to the default Documents directory. Only exists as a user concept on desktop — Android's and iOS's FileSinks pick their storage locations mandatorily.
+_Avoid_: Upload directory (that is the CLI servers' on-disk folder; the app generalizes it behind the FileSink).
+
 **Bound port**:
 The port the process actually listens on.
 _Avoid_: Server port, local port.

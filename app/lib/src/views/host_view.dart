@@ -3,6 +3,7 @@
 
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,9 +23,17 @@ class _HostViewState extends ConsumerState<HostView> {
   @override
   void initState() {
     super.initState();
-    // Restore the persisted port choice once (mirrors the client view,
-    // which loads its registry on creation in the same way).
-    ref.read(serverControllerProvider.notifier).loadPersistedPort();
+    // Restore the persisted port and Save directory choices once (mirrors
+    // the client view, which loads its registry on creation).
+    ref.read(serverControllerProvider.notifier).loadPersistedSettings();
+  }
+
+  /// Ask the user where received files should be saved. Null (cancel)
+  /// leaves the current choice untouched.
+  Future<void> _pickSaveDir() async {
+    final path = await FilePicker.getDirectoryPath();
+    if (path == null) return;
+    ref.read(serverControllerProvider.notifier).setSaveDir(path);
   }
 
   @override
@@ -99,6 +108,31 @@ class _HostViewState extends ConsumerState<HostView> {
                 style: TextStyle(color: Colors.grey, fontSize: 12)),
           ],
         ),
+        if (canChooseSaveDir) ...[
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Save files to'),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  state.saveDir ?? 'Documents folder',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.folder_open),
+                tooltip: 'Choose folder (long-press to reset)',
+                onPressed: _pickSaveDir,
+                onLongPress: () => ref
+                    .read(serverControllerProvider.notifier)
+                    .setSaveDir(null),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
