@@ -19,6 +19,32 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// The stock runner template never sets a window icon, so docks and taskbars
+// show a generic one. Load the bundled asset icon (the same icon.png the app
+// already ships) from next to the executable: data/flutter_assets/ rides
+// along with the binary in the build bundle, the AppImage, and `flutter
+// run`'s build directory alike.
+static void set_window_icon(GtkWindow* window) {
+  gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe == nullptr) {
+    return;
+  }
+  gchar* dir = g_path_get_dirname(exe);
+  gchar* icon_path = g_build_filename(
+      dir, "data", "flutter_assets", "assets", "icon.png", nullptr);
+  GError* error = nullptr;
+  GdkPixbuf* pixbuf = gdk_pixbuf_new_from_file(icon_path, &error);
+  if (pixbuf != nullptr) {
+    gtk_window_set_icon(window, pixbuf);
+    g_object_unref(pixbuf);
+  } else {
+    g_error_free(error);
+  }
+  g_free(icon_path);
+  g_free(dir);
+  g_free(exe);
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -53,6 +79,7 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  set_window_icon(window);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
