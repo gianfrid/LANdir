@@ -16,7 +16,8 @@
 # APK build mirrors release.yml on purpose, including the
 # fail-fast secrets check: a rolling build must never silently fall back to
 # a debug-signed APK that users would install over the signed one. The
-# AppImage build mirrors release.yml as well, for the same reason.
+# AppImage is built by the shared scripts/build-appimage.sh, which it has
+# in common with release.yml, so the two channels cannot drift apart.
 name: Rolling
 
 on:
@@ -98,8 +99,9 @@ jobs:
               /tmp/landir-arm64.apk
           fi
 
-  # Linux desktop AppImage for the rolling channel; mirrors release.yml's
-  # appimage job (duplicated on purpose, same rule as the APK build above).
+  # Linux desktop AppImage for the rolling channel. The build recipe lives
+  # in scripts/build-appimage.sh, shared with release.yml — same factoring
+  # as the APK: one tested recipe, each workflow owns its publish steps.
   appimage:
     runs-on: ubuntu-latest
     steps:
@@ -116,51 +118,8 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Fetch packages
-        working-directory: app
-        run: flutter pub get
-
-      - name: Build Linux bundle
-        working-directory: app
-        run: flutter build linux --release
-
-      # The bundle's runner resolves lib/ and data/ relative to the
-      # executable, so the whole bundle lives under usr/bin — linuxdeploy's
-      # usual usr/bin + usr/lib split would break it.
-      - name: Assemble AppDir
-        run: |
-          BUNDLE=app/build/linux/x64/release/bundle
-          install -d AppDir/usr/bin
-          cp -r "$BUNDLE"/* AppDir/usr/bin/
-          cp app/assets/icon.png AppDir/.DirIcon
-          cp app/assets/icon.png AppDir/landir.png
-          cat > AppDir/landir.desktop <<'EOF'
-          [Desktop Entry]
-          Type=Application
-          Name=Landir
-          Exec=landir_app
-          Icon=landir
-          Categories=Network;
-          EOF
-
-      - name: Download appimagetool
-        # appimagetool has no usable stable release (the 1.9.x tags are the
-        # in-progress rewrite); the continuous build is the supported tool.
-        run: |
-          wget -qO appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
-          chmod +x appimagetool
-
       - name: Build AppImage
-        env:
-          # Runners ship no usable FUSE; extract-and-run makes AppImage
-          # tools self-extract instead of mounting.
-          APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: |
-          printf '%s\n' '#!/bin/sh' \
-            'exec "$(dirname "$(readlink -f "$0")")/usr/bin/landir_app" "$@"' \
-            > AppDir/AppRun
-          chmod +x AppDir/AppRun
-          ARCH=x86_64 ./appimagetool AppDir landir-x86_64.AppImage
+        run: scripts/build-appimage.sh
 
       - name: Publish rolling AppImage to the rolling release
         env:
