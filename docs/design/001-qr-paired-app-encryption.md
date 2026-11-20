@@ -1,6 +1,6 @@
 # 001 — QR-paired app encryption (deferred design)
 
-Status: **implemented** (milestones M1–M6, branch `feat/qr-paired-encryption`).
+Status: **implemented** (milestones M1–M6, PR #7).
 Direction fixed (see "Decisions already made"). ADR 0003 records the parity
 exception; GLOSSARY has the Host key / Pairing terms. Companion research and its source
 citations: [docs/research/001-encryption-over-http-without-tls.md](../research/001-encryption-over-http-without-tls.md)
