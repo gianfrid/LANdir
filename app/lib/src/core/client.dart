@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'crypto.dart';
 import 'multipart_writer.dart';
 
 /// One entry from a server's /files listing.
@@ -43,9 +44,16 @@ class ServerGoneException extends HttpException {
 /// A Landir server the client can talk to.
 class LandirClient {
   final String baseUrl; // e.g. http://192.168.1.5:8000/abc123/
+
+  /// The pinned host key (design 001, M3/M4). When set, every request goes
+  /// to the sealed endpoints and every response must open under the pinned
+  /// key — a pinned server is always sealed, never a silent fallback.
+  /// Null means keyless plaintext mode (host QR carried no #k=).
+  final Uint8List? hostKey;
+
   final HttpClient _http = HttpClient();
 
-  LandirClient(this.baseUrl) {
+  LandirClient(this.baseUrl, {this.hostKey}) {
     // Normalize: ensure trailing slash
     if (!baseUrl.endsWith('/')) {
       throw ArgumentError('baseUrl must end with /');
@@ -59,12 +67,46 @@ class LandirClient {
   String listUrl(String relPath) =>
       '${baseUrl}ls/${relPath.split('/').map(Uri.encodeComponent).join('/')}';
 
+  // Sealed endpoint mirrors (all POST, envelope in/out).
+  String get _sfilesUrl => '${baseUrl}sfiles';
+  String get _suploadUrl => '${baseUrl}supload';
+  String get _slsUrl => '${baseUrl}sls';
+  String get _sflUrl => '${baseUrl}sfl';
+
   /// Fetch the root file listing. Returns entries newest-first.
   Future<List<RemoteFile>> listFiles() => listDir('');
+
+  /// POSTs [plaintext] as a sealed envelope to [url] and opens the sealed
+  /// response. Returns (status, plaintext); the plaintext is null when the
+  /// response does not authenticate under the pinned key (tamper/MITM) —
+  /// callers turn that into an error, never into a plaintext fallback.
+  Future<(int, Uint8List?)> _sealedPost(String url, Uint8List plaintext) async {
+    final key = hostKey;
+    if (key == null) throw StateError('sealed call on a keyless client');
+    final sealed = await sealToHost(plaintext, key);
+    final req = await _http.postUrl(Uri.parse(url));
+    req.headers.set('Content-Type', 'application/octet-stream');
+    req.contentLength = sealed.envelope.length;
+    req.add(sealed.envelope);
+    final res = await req.close();
+    final chunks = <Uint8List>[];
+    await for (final chunk in res) {
+      chunks.add(Uint8List.fromList(chunk));
+    }
+    final total = chunks.fold<int>(0, (s, c) => s + c.length);
+    final body = Uint8List(total);
+    var offset = 0;
+    for (final c in chunks) {
+      body.setRange(offset, offset + c.length, c);
+      offset += c.length;
+    }
+    return (res.statusCode, await openResponse(body, sealed.ephKeyPair, key));
+  }
 
   /// Fetch a directory listing. [relPath] is '' for root, or 'a/b' for
   /// nested directories.
   Future<List<RemoteFile>> listDir(String relPath) async {
+    if (hostKey != null) return _listDirSealed(relPath);
     final url = relPath.isEmpty ? filesUrl : listUrl(relPath);
     final req = await _http.getUrl(Uri.parse(url));
     final res = await req.close();
@@ -76,6 +118,23 @@ class LandirClient {
       throw HttpException('listDir failed: ${res.statusCode}');
     }
     final body = await res.transform(utf8.decoder).join();
+    return _parseListing(body, url);
+  }
+
+  Future<List<RemoteFile>> _listDirSealed(String relPath) async {
+    final url = relPath.isEmpty ? _sfilesUrl : _slsUrl;
+    final plaintext =
+        relPath.isEmpty ? Uint8List(0) : Uint8List.fromList(utf8.encode(relPath));
+    final result = await _sealedPost(url, plaintext);
+    final (status, opened) = result;
+    if (status == 404) throw ServerGoneException(url);
+    if (status != 200 || opened == null) {
+      throw HttpException('sealed listDir failed: $status');
+    }
+    return _parseListing(utf8.decode(opened), url);
+  }
+
+  List<RemoteFile> _parseListing(String body, String url) {
     final list = jsonDecode(body) as List<dynamic>;
     return list
         .map((e) => RemoteFile.fromJson(e as Map<String, dynamic>))
@@ -88,6 +147,7 @@ class LandirClient {
       filename: filename,
       content: content,
     );
+    if (hostKey != null) return _uploadFileSealed(body, boundary);
     final req = await _http.postUrl(Uri.parse(uploadUrl));
     req.headers.set('Content-Type', 'multipart/form-data; boundary=$boundary');
     // Explicit Content-Length: the Python server reads exactly this many
@@ -99,16 +159,41 @@ class LandirClient {
     return res.statusCode == 200;
   }
 
+  Future<bool> _uploadFileSealed(List<int> body, String boundary) async {
+    // The sealed upload plaintext is: boundary '\r\n' + multipart body.
+    final inner = Uint8List(boundary.length + 2 + body.length);
+    inner.setRange(0, boundary.length, utf8.encode(boundary));
+    inner[boundary.length] = 0x0d;
+    inner[boundary.length + 1] = 0x0a;
+    inner.setRange(boundary.length + 2, inner.length, body);
+    final (status, opened) = await _sealedPost(_suploadUrl, inner);
+    return status == 200 && opened != null;
+  }
+
   /// Download a file. Returns the raw bytes.
   ///
   /// A 404 here means the file is missing, not that the server is gone, so it
   /// raises a plain [HttpException].
   Future<Uint8List> downloadFile(String name) async {
+    if (hostKey != null) return _downloadFileSealed(name);
     final req = await _http.getUrl(Uri.parse(downloadUrl(name)));
     final res = await req.close();
     if (res.statusCode != 200) {
       throw HttpException('download failed: ${res.statusCode}');
     }
+    return _readAll(res);
+  }
+
+  Future<Uint8List> _downloadFileSealed(String name) async {
+    final result = await _sealedPost(_sflUrl, Uint8List.fromList(utf8.encode(name)));
+    final (status, opened) = result;
+    if (status != 200 || opened == null) {
+      throw HttpException('sealed download failed: $status');
+    }
+    return opened;
+  }
+
+  Future<Uint8List> _readAll(HttpClientResponse res) async {
     final chunks = <Uint8List>[];
     await for (final chunk in res) {
       chunks.add(Uint8List.fromList(chunk));
