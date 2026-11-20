@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/crypto.dart';
 import '../core/file_sink.dart';
 import '../core/server.dart';
 import '../network_info.dart';
@@ -132,7 +133,10 @@ class ServerController extends _$ServerController {
         insecure: state.insecure,
         secretToken: token,
       );
-      _server = LandirServer(config, sink);
+      // Host key (design 001, M1): generated once and persisted in the
+      // app-support directory — never under uploads/.
+      final hostKey = await HostKeyStore(appDir.path).loadOrCreate();
+      _server = LandirServer(config, sink, hostKey: hostKey);
       await _server!.start();
       final port = _server!.boundPort;
 
@@ -144,7 +148,11 @@ class ServerController extends _$ServerController {
       }
 
       final addr = await findBestAddress();
-      final url = advertisedUrl(addr.address, port, token);
+      // Advertise the host key in the QR fragment when it fits the encoder
+      // capacity; otherwise warn and fall back to the keyless URL (the
+      // client then shows the "Not encrypted" badge).
+      final withKey = advertisedUrlWithKey(addr.address, port, token, hostKey.publicKey);
+      final url = withKey ?? advertisedUrl(addr.address, port, token);
 
       state = state.copyWith(
         running: true,

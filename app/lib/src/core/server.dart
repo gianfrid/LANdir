@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'crypto.dart';
 import 'file_sink.dart';
 import 'multipart.dart';
 import 'page.dart';
@@ -44,9 +45,15 @@ class ServerConfig {
 class LandirServer {
   final ServerConfig config;
   final FileSink sink;
+
+  /// The host's long-term X25519 key (design 001, M2). When null the server
+  /// is keyless (e.g. started before this feature): the sealed endpoints
+  /// answer 404 and the advertised URL carries no #k= fragment.
+  final HostKey? hostKey;
+
   HttpServer? _httpServer;
 
-  LandirServer(this.config, this.sink);
+  LandirServer(this.config, this.sink, {this.hostKey});
 
   String get pagePath => config.pagePath;
 
@@ -172,7 +179,7 @@ class LandirServer {
 
   Future<void> _handlePost(HttpRequest req, String base) async {
     if (base != config.uploadPath) {
-      _sendError(req, 404);
+      await _handleSealedPost(req, base);
       return;
     }
     final ctype = req.headers.value('content-type') ?? '';
@@ -204,6 +211,16 @@ class LandirServer {
       return;
     }
 
+    final body = await _readBody(req);
+    final saved = await _saveUploadedFiles(body, boundary);
+    if (saved > 0) {
+      _send(req, 200, utf8.encode('OK'), contentType: 'text/plain');
+    } else {
+      _sendError(req, 400);
+    }
+  }
+
+  Future<Uint8List> _readBody(HttpRequest req) async {
     // Buffer the body (dart:io gives us a stream; we read it fully because
     // the Python reference also reads the full body before parsing).
     final chunks = <Uint8List>[];
@@ -218,7 +235,13 @@ class LandirServer {
       body.setRange(offset, offset + chunk.length, chunk);
       offset += chunk.length;
     }
+    return body;
+  }
 
+  /// Parses [body] as multipart and writes every file through the sink.
+  /// Returns how many files were saved. The decrypted filename still goes
+  /// through safeName() — SPEC.md rule 1 is unchanged below the crypto layer.
+  Future<int> _saveUploadedFiles(Uint8List body, String boundary) async {
     final files = parseMultipart(body, boundary);
     var saved = 0;
     for (final f in files) {
@@ -239,12 +262,115 @@ class LandirServer {
         continue;
       }
     }
+    return saved;
+  }
 
-    if (saved > 0) {
-      _send(req, 200, utf8.encode('OK'), contentType: 'text/plain');
-    } else {
-      _sendError(req, 400);
+  // --- Sealed endpoints (design 001, M2) ---------------------------------
+  //
+  // All sealed endpoints are POST with body = request envelope
+  // ('L' ‖ ephPub ‖ nonce ‖ ct+mac) and answer with a response envelope
+  // ('L' ‖ nonce ‖ ct+mac). Decrypt first, then delegate into the same
+  // logic as the plaintext endpoints. AEAD failure -> plain 400 (there is
+  // no authenticated channel to seal an error into).
+  //
+  //   <pagePath>supload  plaintext = boundary '\r\n' + multipart body
+  //   <pagePath>sfiles   plaintext = empty            -> sealed JSON listing
+  //   <pagePath>sls      plaintext = UTF-8 dir path   -> sealed JSON listing
+  //   <pagePath>sfl      plaintext = UTF-8 file path  -> sealed file bytes
+
+  Future<void> _handleSealedPost(HttpRequest req, String base) async {
+    final host = hostKey;
+    final p = config.pagePath;
+    final isSealed = host != null &&
+        (base == '${p}supload' ||
+            base == '${p}sfiles' ||
+            base == '${p}sls' ||
+            base == '${p}sfl');
+    if (!isSealed) {
+      _sendError(req, 404);
+      return;
     }
+    final envelope = await _readBody(req);
+    final plain = await openAtHost(envelope, host);
+    if (plain == null) {
+      _sendError(req, 400);
+      return;
+    }
+    // The size limit applies to the decrypted payload, not the (larger)
+    // envelope that carries it.
+    if (config.maxUploadBytes != null && plain.length > config.maxUploadBytes!) {
+      _sendError(req, 413);
+      return;
+    }
+    final ephPub = ephPublicKeyOf(envelope);
+    Future<void> respondSealed(List<int> plaintextPayload) async {
+      final sealed = await sealResponse(
+          Uint8List.fromList(plaintextPayload), ephPub, host);
+      _send(req, 200, sealed,
+          contentType: 'application/octet-stream');
+    }
+
+    if (base == '${p}supload') {
+      // First line of the plaintext is the multipart boundary.
+      final sep = plain.indexOf(0x0d); // '\r'
+      if (sep < 0 || sep + 1 >= plain.length || plain[sep + 1] != 0x0a) {
+        _sendError(req, 400);
+        return;
+      }
+      final boundary = utf8.decode(plain.sublist(0, sep));
+      final saved = await _saveUploadedFiles(
+          Uint8List.sublistView(plain, sep + 2), boundary);
+      if (saved > 0) {
+        await respondSealed(utf8.encode('OK'));
+      } else {
+        _sendError(req, 400);
+      }
+      return;
+    }
+    if (base == '${p}sfiles' || base == '${p}sls') {
+      String relPath = '';
+      if (base == '${p}sls') {
+        final sanitized = sanitizeSinkPath(utf8.decode(plain), config.uploadDir);
+        if (sanitized == null) {
+          _sendError(req, 404);
+          return;
+        }
+        relPath = sanitized == '.' ? '' : sanitized;
+        final dir = Directory(relPath.isEmpty
+            ? config.uploadDir
+            : '${config.uploadDir}/$relPath');
+        if (!dir.existsSync()) {
+          _sendError(req, 404);
+          return;
+        }
+      }
+      final entries = await sink.list(relPath);
+      await respondSealed(utf8.encode(jsonEncode(entries.map((e) => e.toJson()).toList())));
+      return;
+    }
+    // sfl: sealed download
+    final rel = sanitizeSinkPath(utf8.decode(plain), config.uploadDir);
+    if (rel == null) {
+      _sendError(req, 404);
+      return;
+    }
+    final stream = await sink.openRead(rel);
+    final size = await sink.sizeOf(rel);
+    if (stream == null || size == null) {
+      _sendError(req, 404);
+      return;
+    }
+    final chunks = <Uint8List>[];
+    await for (final chunk in stream) {
+      chunks.add(Uint8List.fromList(chunk));
+    }
+    final bytes = Uint8List(size);
+    var offset = 0;
+    for (final c in chunks) {
+      bytes.setRange(offset, offset + c.length, c);
+      offset += c.length;
+    }
+    await respondSealed(bytes);
   }
 
   void _send(HttpRequest req, int status, List<int> body,
