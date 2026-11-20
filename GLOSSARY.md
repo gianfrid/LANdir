@@ -60,3 +60,11 @@ _Avoid_: Server port, local port.
 **Hotspot mode**:
 The scenario where the Host phone runs a WiFi hotspot (Android `LocalOnlyHotspot` or iOS Personal Hotspot) and a Client connects to it. The phone is the network gateway, so its hotspot IP (e.g. `192.168.43.1` / `172.20.10.1`) is the address encoded in the QR code.
 _Avoid_: Tethering (broader than what Landir needs).
+
+**Host key**:
+The long-term X25519 identity of a Host, generated on first run, persisted in the app-support directory (never under `uploads/`), and delivered out-of-band via the QR code fragment (`#k=`). App clients pin it; pinned servers are always contacted over the sealed endpoints.
+_Avoid_: Server key (the CLI hosts have no key).
+
+**Pairing**:
+The scan that binds a host address (host, port — never the per-run token) to its Host key in the client registry. A rescan presenting a different key for the same address blocks and requires explicit re-pairing.
+_Avoid_: Trust, verification.

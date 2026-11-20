@@ -151,6 +151,16 @@ and client (role #2) for Android, iOS, and Linux desktop. The security-critical
 core (`app/lib/src/core/`) is pure Dart, tested against golden vectors exported
 from `landir.py` via `scripts/export_golden.py`.
 
+**App = secure path; browser = documented plaintext.** The app host carries a
+long-term X25519 host key in the QR fragment (`#k=`) and serves sealed
+endpoints; app clients pin that key and seal every request (see
+[docs/design/001-qr-paired-app-encryption.md](docs/design/001-qr-paired-app-encryption.md)
+and [ADR 0003](docs/adr/0003-sealed-app-endpoints.md)). A plain browser scanning
+the same QR gets the same plaintext HTTP page as the CLI servers — over plain
+HTTP on the LAN that page is not authenticated, which is why the encrypted path
+exists only in the app. CLI hosts (`landir.py`, Rust) have no key and keep the
+plaintext contract unchanged.
+
 ```bash
 cd app
 flutter pub get

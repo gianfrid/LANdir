@@ -180,7 +180,7 @@ Future<List<int>> sealRoundTrip(HostKey a, HostKey b) async {
     keyPair: a.keyPair,
     remotePublicKey: SimplePublicKey(b.publicKey, type: KeyPairType.x25519),
   );
-  return (await dh.extractBytes())!;
+  return (await dh.extractBytes());
 }
 
 Future<String> _rfc5869Case1() async {
