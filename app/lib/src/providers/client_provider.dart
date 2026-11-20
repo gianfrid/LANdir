@@ -36,8 +36,9 @@ class SavedServer {
     return '${uri.scheme}://${uri.host}:${uri.port}';
   }
 
-  Uint8List? get hostKeyBytes =>
-      hostKey == null ? null : Uint8List.fromList(base64Url.decode(_pad(hostKey!)));
+  Uint8List? get hostKeyBytes => hostKey == null
+      ? null
+      : Uint8List.fromList(base64Url.decode(padBase64Url(hostKey!)));
 
   SavedServer copyWith({String? name, String? baseUrl, String? hostKey}) =>
       SavedServer(
@@ -57,11 +58,6 @@ class SavedServer {
         baseUrl: json['baseUrl'] as String,
         hostKey: json['hostKey'] as String?,
       );
-}
-
-String _pad(String s) {
-  final rem = s.length % 4;
-  return rem == 0 ? s : s + '=' * (4 - rem);
 }
 
 /// Client state: saved servers, the currently selected server, and its
@@ -271,18 +267,18 @@ class ClientController extends _$ClientController {
   }
 
   void _add(SavedServer server, {bool force = false}) {
-    // Pin conflict check: same (host, port) with a different host key.
-    // Keyless -> keyed is allowed (host upgraded); keyed -> keyless is
-    // allowed (host downgraded); keyed -> different key blocks for re-pair
-    // unless [force] (the user just confirmed the re-pair explicitly).
+    // Pin conflict check: same (host, port) with a change to the pin state.
+    // Keyless -> keyed is allowed (host upgraded). Keyed -> anything else —
+    // a different key OR NO key at all (QR without #k=, typed URL) — blocks
+    // for explicit re-pair (Noise §14 rollback discipline: a pinned server
+    // is always sealed, never silently downgraded to plaintext) unless
+    // [force] (the user just confirmed the re-pair explicitly).
     if (!force) {
       final sameHostPort = state.servers
           .where((s) => s.hostPortKey == server.hostPortKey)
           .toList();
       for (final existing in sameHostPort) {
-        if (existing.hostKey != null &&
-            server.hostKey != null &&
-            existing.hostKey != server.hostKey) {
+        if (existing.hostKey != null && existing.hostKey != server.hostKey) {
           state = state.copyWith(
             pendingKeyConflict: (existing: existing, scanned: server),
             error: null,

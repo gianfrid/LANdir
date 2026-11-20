@@ -19,37 +19,22 @@ String toHex(List<int> b) =>
 void main() {
   group('RFC 7748 X25519 vectors', () {
     test('public keys and shared secret match the RFC', () async {
-      final store = HostKeyStore(Directory.systemTemp.createTempSync().path);
       final alice = await _keyFromSeed(
           '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a');
       final bob = await _keyFromSeed(
           '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb');
-      expect(toHex(alice.publicKey), startsWith('8520f009'));
       expect(toHex(alice.publicKey),
           '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a');
       expect(toHex(bob.publicKey),
           'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f');
-      final shared = await sealRoundTrip(alice, bob);
+      final shared = await _x25519Shared(alice, bob);
       expect(toHex(shared),
           '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742');
-      // silence unused store warning pattern: store used in its own group
-      expect(store.dirPath, isNotEmpty);
     });
   });
 
   group('RFC 5869 HKDF-SHA256 vectors', () {
     test('test case 1 OKM matches the RFC', () async {
-      final plaintext = utf8.encode('hkdf check');
-      final host = await _keyFromSeed('01' * 32);
-      // Derive through the envelope path with a fixed nonce is covered by
-      // the golden test below; here we check the raw HKDF against the RFC by
-      // sealing with a fixed ephemeral and reading back via the public API.
-      final sealed = await sealToHost(plaintext, host.publicKey);
-      final opened = await openAtHost(sealed.envelope, host);
-      expect(opened, isNotNull);
-      expect(utf8.decode(opened!), 'hkdf check');
-      // The RFC 5869 TC1 OKM is asserted through the same HKDF the module
-      // uses: derive with the documented IKM/salt/info via the package.
       final okm = await _rfc5869Case1();
       expect(okm,
           '3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf'
@@ -90,6 +75,29 @@ void main() {
     test('truncated envelope returns null', () async {
       final host = await _keyFromSeed('01' * 32);
       expect(await openAtHost(hex(envelope).sublist(0, 20), host), isNull);
+    });
+
+    test('low-order ephemeral (all-zero DH) is rejected by the guard',
+        () async {
+      final host = await _keyFromSeed('01' * 32);
+      // Encrypt under the key an all-zero shared secret would derive, so
+      // only the contributory check — not an AEAD failure — can reject
+      // this envelope (u=0 and u=1 are low-order Curve25519 points).
+      final key = await Hkdf(hmac: Hmac.sha256(), outputLength: 32)
+          .deriveKey(
+              secretKey: SecretKey(Uint8List(32)),
+              nonce: const [],
+              info: utf8.encode('landir-sealed-v1-request'));
+      final box = await Chacha20.poly1305Aead()
+          .encrypt(utf8.encode('sneaky'), secretKey: key, nonce: Uint8List(12));
+      final ephPub = Uint8List(32)..[0] = 1;
+      final env = Uint8List(1 + 32 + 12 + box.cipherText.length + 16);
+      env[0] = 0x4c;
+      env.setRange(1, 33, ephPub);
+      env.setRange(33, 45, box.nonce);
+      env.setRange(45, 45 + box.cipherText.length, box.cipherText);
+      env.setRange(env.length - 16, env.length, box.mac.bytes);
+      expect(await openAtHost(env, host), isNull);
     });
   });
 
@@ -174,13 +182,13 @@ Future<HostKey> _keyFromSeed(String seedHex) async {
   return HostKeyStore(dir.path).loadOrCreate();
 }
 
-Future<List<int>> sealRoundTrip(HostKey a, HostKey b) async {
+Future<List<int>> _x25519Shared(HostKey a, HostKey b) async {
   final x = X25519();
   final dh = await x.sharedSecretKey(
     keyPair: a.keyPair,
     remotePublicKey: SimplePublicKey(b.publicKey, type: KeyPairType.x25519),
   );
-  return (await dh.extractBytes());
+  return dh.extractBytes();
 }
 
 Future<String> _rfc5869Case1() async {

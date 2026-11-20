@@ -129,28 +129,18 @@ class LandirServer {
       return;
     }
     if (base == config.filesPath) {
-      final entries = await sink.list('');
-      _sendJson(req, entries.map((e) => e.toJson()).toList());
+      final json = await _listingJsonBytes('');
+      _send(req, 200, json, contentType: 'application/json');
       return;
     }
     if (base.startsWith(config.listPrefix)) {
       final relPath = base.substring(config.listPrefix.length);
-      final sanitized = sanitizeSinkPath(relPath, config.uploadDir);
-      if (sanitized == null) {
+      final json = await _listingJsonBytesForPath(relPath);
+      if (json == null) {
         _sendError(req, 404);
         return;
       }
-      final dirPath = sanitized == '.' ? '' : sanitized;
-      // Nonexistent directory is a 404 (matches the Python reference).
-      final dir = Directory(dirPath.isEmpty
-          ? config.uploadDir
-          : '${config.uploadDir}/$dirPath');
-      if (!dir.existsSync()) {
-        _sendError(req, 404);
-        return;
-      }
-      final entries = await sink.list(dirPath);
-      _sendJson(req, entries.map((e) => e.toJson()).toList());
+      _send(req, 200, json, contentType: 'application/json');
       return;
     }
     if (base.startsWith(config.downloadPrefix)) {
@@ -220,23 +210,9 @@ class LandirServer {
     }
   }
 
-  Future<Uint8List> _readBody(HttpRequest req) async {
-    // Buffer the body (dart:io gives us a stream; we read it fully because
-    // the Python reference also reads the full body before parsing).
-    final chunks = <Uint8List>[];
-    var total = 0;
-    await for (final chunk in req) {
-      chunks.add(Uint8List.fromList(chunk));
-      total += chunk.length;
-    }
-    final body = Uint8List(total);
-    var offset = 0;
-    for (final chunk in chunks) {
-      body.setRange(offset, offset + chunk.length, chunk);
-      offset += chunk.length;
-    }
-    return body;
-  }
+  /// Buffers the full request body (dart:io streams it; the Python
+  /// reference also reads the full body before parsing).
+  Future<Uint8List> _readBody(HttpRequest req) => _collectStream(req);
 
   /// Parses [body] as multipart and writes every file through the sink.
   /// Returns how many files were saved. The decrypted filename still goes
@@ -328,24 +304,14 @@ class LandirServer {
       return;
     }
     if (base == '${p}sfiles' || base == '${p}sls') {
-      String relPath = '';
-      if (base == '${p}sls') {
-        final sanitized = sanitizeSinkPath(utf8.decode(plain), config.uploadDir);
-        if (sanitized == null) {
-          _sendError(req, 404);
-          return;
-        }
-        relPath = sanitized == '.' ? '' : sanitized;
-        final dir = Directory(relPath.isEmpty
-            ? config.uploadDir
-            : '${config.uploadDir}/$relPath');
-        if (!dir.existsSync()) {
-          _sendError(req, 404);
-          return;
-        }
+      final json = base == '${p}sfiles'
+          ? await _listingJsonBytes('')
+          : await _listingJsonBytesForPath(utf8.decode(plain));
+      if (json == null) {
+        _sendError(req, 404);
+        return;
       }
-      final entries = await sink.list(relPath);
-      await respondSealed(utf8.encode(jsonEncode(entries.map((e) => e.toJson()).toList())));
+      await respondSealed(json);
       return;
     }
     // sfl: sealed download
@@ -360,17 +326,42 @@ class LandirServer {
       _sendError(req, 404);
       return;
     }
+    await respondSealed(await _collectStream(stream));
+  }
+
+  /// Listing as JSON bytes; [relPath] '' lists the upload root.
+  Future<List<int>> _listingJsonBytes(String relPath) async {
+    final entries = await sink.list(relPath);
+    return utf8.encode(jsonEncode(entries.map((e) => e.toJson()).toList()));
+  }
+
+  /// Nested-listing JSON bytes after sanitizing [rawRelPath]; null when the
+  /// path is rejected or the directory doesn't exist (both 404, matching
+  /// the Python reference).
+  Future<List<int>?> _listingJsonBytesForPath(String rawRelPath) async {
+    final sanitized = sanitizeSinkPath(rawRelPath, config.uploadDir);
+    if (sanitized == null) return null;
+    final dirPath = sanitized == '.' ? '' : sanitized;
+    final dir = Directory(dirPath.isEmpty
+        ? config.uploadDir
+        : '${config.uploadDir}/$dirPath');
+    if (!dir.existsSync()) return null;
+    return _listingJsonBytes(dirPath);
+  }
+
+  Future<Uint8List> _collectStream(Stream<List<int>> stream) async {
     final chunks = <Uint8List>[];
     await for (final chunk in stream) {
       chunks.add(Uint8List.fromList(chunk));
     }
-    final bytes = Uint8List(size);
+    final total = chunks.fold<int>(0, (s, c) => s + c.length);
+    final out = Uint8List(total);
     var offset = 0;
     for (final c in chunks) {
-      bytes.setRange(offset, offset + c.length, c);
+      out.setRange(offset, offset + c.length, c);
       offset += c.length;
     }
-    await respondSealed(bytes);
+    return out;
   }
 
   void _send(HttpRequest req, int status, List<int> body,
@@ -382,11 +373,6 @@ class LandirServer {
     req.response.headers.set('Content-Length', body.length.toString());
     req.response.add(body);
     req.response.close();
-  }
-
-  void _sendJson(HttpRequest req, Object jsonData) {
-    final body = utf8.encode(jsonEncode(jsonData));
-    _send(req, 200, body, contentType: 'application/json');
   }
 
   void _sendError(HttpRequest req, int status) {

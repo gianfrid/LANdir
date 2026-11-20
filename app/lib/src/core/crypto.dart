@@ -128,9 +128,26 @@ String _pad(String s) {
   return rem == 0 ? s : s + '=' * (4 - rem);
 }
 
-Future<SecretKey> _deriveKey(SecretKey dh, String info) async {
+/// Restores stripped base64url padding (see advertisedUrlWithKey).
+String padBase64Url(String s) => _pad(s);
+
+/// X25519 shared secret with the Noise contributory check: an all-zero
+/// result (low-order / decoy public key, RFC 7748 §6.1) yields null instead
+/// of a key, so a crafted low-order envelope cannot force a known shared
+/// secret. The construction is Noise-N-shaped and stays that way.
+Future<Uint8List?> _sharedSecret(SimpleKeyPair kp, Uint8List remotePub) async {
+  final dh = await _x25519.sharedSecretKey(
+    keyPair: kp,
+    remotePublicKey: SimplePublicKey(remotePub, type: KeyPairType.x25519),
+  );
+  final bytes = await dh.extractBytes();
+  if (bytes.every((b) => b == 0)) return null;
+  return Uint8List.fromList(bytes);
+}
+
+Future<SecretKey> _deriveKey(Uint8List dh, String info) async {
   final key = await _hkdf.deriveKey(
-    secretKey: dh,
+    secretKey: SecretKey(dh),
     nonce: const [],
     info: utf8.encode(info),
   );
@@ -151,11 +168,10 @@ Future<({Uint8List envelope, SimpleKeyPair ephKeyPair})> sealToHost(
     Uint8List plaintext, Uint8List hostPublicKey) async {
   final eph = await _x25519.newKeyPair();
   final ephPub = await eph.extractPublicKey();
-  final dh = await _x25519.sharedSecretKey(
-    keyPair: eph,
-    remotePublicKey:
-        SimplePublicKey(hostPublicKey, type: KeyPairType.x25519),
-  );
+  final dh = await _sharedSecret(eph, hostPublicKey);
+  // The pinned host key is a low-order point: there is no honest key
+  // exchange to have. Fail loudly — callers show an error, never plaintext.
+  if (dh == null) throw ArgumentError('pinned host key is a low-order point');
   final key = await _deriveKey(dh, _hkdfInfoRequest);
   final nonce = _randomNonce();
   final box = await _aead.encrypt(plaintext, secretKey: key, nonce: nonce);
@@ -187,10 +203,8 @@ Future<Uint8List?> openAtHost(Uint8List envelope, HostKey host) async {
     nonce: nonce,
     mac: Mac(Uint8List.sublistView(envelope, header + ctLen)),
   );
-  final dh = await _x25519.sharedSecretKey(
-    keyPair: host.keyPair,
-    remotePublicKey: SimplePublicKey(ephPub, type: KeyPairType.x25519),
-  );
+  final dh = await _sharedSecret(host.keyPair, ephPub);
+  if (dh == null) return null; // low-order ephemeral: reject the envelope
   final key = await _deriveKey(dh, _hkdfInfoRequest);
   try {
     final clear = await _aead.decrypt(box, secretKey: key);
@@ -204,10 +218,11 @@ Future<Uint8List?> openAtHost(Uint8List envelope, HostKey host) async {
 /// request envelope (host side). Response envelope: 'L' ‖ nonce(12) ‖ ct+mac.
 Future<Uint8List> sealResponse(
     Uint8List plaintext, Uint8List ephPublicKey, HostKey host) async {
-  final dh = await _x25519.sharedSecretKey(
-    keyPair: host.keyPair,
-    remotePublicKey: SimplePublicKey(ephPublicKey, type: KeyPairType.x25519),
-  );
+  final dh = await _sharedSecret(host.keyPair, ephPublicKey);
+  // Null is unreachable here: _handleSealedPost only seals responses after
+  // openAtHost accepted the envelope (which already rejects low-order
+  // ephemerals). Fail loudly rather than seal under a zero secret.
+  if (dh == null) throw StateError('low-order ephemeral in a valid envelope');
   final key = await _deriveKey(dh, _hkdfInfoResponse);
   final nonce = _randomNonce();
   final box = await _aead.encrypt(plaintext, secretKey: key, nonce: nonce);
@@ -239,11 +254,8 @@ Future<Uint8List?> openResponse(Uint8List envelope, SimpleKeyPair ephKeyPair,
     nonce: nonce,
     mac: Mac(Uint8List.sublistView(envelope, header + ctLen)),
   );
-  final dh = await _x25519.sharedSecretKey(
-    keyPair: ephKeyPair,
-    remotePublicKey:
-        SimplePublicKey(hostPublicKey, type: KeyPairType.x25519),
-  );
+  final dh = await _sharedSecret(ephKeyPair, hostPublicKey);
+  if (dh == null) return null;
   final key = await _deriveKey(dh, _hkdfInfoResponse);
   try {
     final clear = await _aead.decrypt(box, secretKey: key);

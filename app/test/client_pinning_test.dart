@@ -127,6 +127,37 @@ void main() {
     expect(stateOf(container).servers.first.baseUrl, 'http://192.168.1.10:8000/tokB/');
   });
 
+  test('keyless rescan of a pinned host:port blocks (no silent downgrade)',
+      () async {
+    final keyA = base64Url.encode(List.filled(32, 1)).replaceAll('=', '');
+    controller.addServer('http://192.168.1.10:8000/tokA/#k=$keyA');
+    final pinned = stateOf(container).servers.single;
+
+    // Same host:port, QR without #k= (or a typed URL, which drops the
+    // fragment): must not silently replace the pin with a keyless entry.
+    controller.addServer('http://192.168.1.10:8000/tokB/');
+    final conflict = stateOf(container).pendingKeyConflict;
+    expect(conflict, isNotNull);
+    expect(stateOf(container).servers.single.hostKey, pinned.hostKey);
+
+    // Decline: the pin survives.
+    controller.cancelRekey();
+    expect(stateOf(container).pendingKeyConflict, isNull);
+    expect(stateOf(container).servers.single.hostKey, pinned.hostKey);
+
+    // Explicit confirmation is the only way to downgrade.
+    controller.addServer('http://192.168.1.10:8000/tokB/');
+    controller.confirmRekey();
+    expect(stateOf(container).servers.single.hostKey, isNull);
+    expect(stateOf(container).servers.single.baseUrl,
+        'http://192.168.1.10:8000/tokB/');
+
+    // Keyless -> keyed (host upgraded) is the one silent transition.
+    controller.addServer('http://192.168.1.10:8000/tokC/#k=$keyA');
+    expect(stateOf(container).pendingKeyConflict, isNull);
+    expect(stateOf(container).servers.single.hostKey, keyA);
+  });
+
   test('rescan with the same key for the same host:port just refreshes the token',
       () async {
     controller.addServer('http://192.168.1.10:8000/tokA/${keyFragment()}');

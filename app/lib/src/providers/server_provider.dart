@@ -23,6 +23,7 @@ part 'server_provider.g.dart';
 /// Immutable state of the host server.
 class ServerState {
   static const _unsetError = Object();
+  static const _unsetWarning = Object();
 
   final bool running;
   final int? port; // bound port while running
@@ -31,6 +32,10 @@ class ServerState {
   final String? token;
   final bool insecure;
   final String? error;
+
+  /// Non-fatal condition the user must know about (transient like
+  /// [error]: reset unless explicitly passed).
+  final String? warning;
   final String? hotspotSsid;
 
   /// Where received files are saved (desktop only). Null means the
@@ -45,6 +50,7 @@ class ServerState {
     this.token,
     this.insecure = false,
     this.error,
+    this.warning,
     this.hotspotSsid,
     this.saveDir,
   });
@@ -58,6 +64,8 @@ class ServerState {
     bool? insecure,
     // Null clears the error, so a sentinel marks "argument not given".
     Object? error = _unsetError,
+    // Same sentinel convention as error.
+    Object? warning = _unsetWarning,
     String? hotspotSsid,
     String? saveDir,
   }) =>
@@ -71,6 +79,9 @@ class ServerState {
         error: identical(error, _unsetError)
             ? this.error
             : error as String?,
+        warning: identical(warning, _unsetWarning)
+            ? this.warning
+            : warning as String?,
         hotspotSsid: hotspotSsid ?? this.hotspotSsid,
         saveDir: saveDir ?? this.saveDir,
       );
@@ -116,7 +127,7 @@ class ServerController extends _$ServerController {
 
   Future<void> start() async {
     if (state.running) return;
-    state = state.copyWith(error: null);
+    state = state.copyWith(error: null, warning: null);
     try {
       final sink = await ref.read(fileSinkProvider.future);
       // The server core needs a real, app-writable directory for safeName's
@@ -149,10 +160,14 @@ class ServerController extends _$ServerController {
 
       final addr = await findBestAddress();
       // Advertise the host key in the QR fragment when it fits the encoder
-      // capacity; otherwise warn and fall back to the keyless URL (the
-      // client then shows the "Not encrypted" badge).
+      // capacity; otherwise fall back to the keyless URL and warn — the
+      // client will pair without encryption, which the user must know.
       final withKey = advertisedUrlWithKey(addr.address, port, token, hostKey.publicKey);
       final url = withKey ?? advertisedUrl(addr.address, port, token);
+      final warning = withKey == null
+          ? 'The address is too long for the QR code, so the host key was '
+              'omitted: app clients will connect WITHOUT encryption.'
+          : null;
 
       state = state.copyWith(
         running: true,
@@ -160,6 +175,7 @@ class ServerController extends _$ServerController {
         url: url,
         token: token,
         hotspotSsid: hotspotSsid,
+        warning: warning,
       );
 
       if (Platform.isAndroid) {
