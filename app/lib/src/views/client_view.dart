@@ -51,6 +51,18 @@ class _ClientViewState extends ConsumerState<ClientView> {
       _confirmNonLanServer(context, ref, pending);
     });
 
+    // A rescan presented a different host key for an already-pinned
+    // (host, port): block and ask for explicit re-pairing (Signal
+    // safety-number pattern). Never silently adopt the new key.
+    ref.listen(clientControllerProvider, (prev, next) {
+      final conflict = next.pendingKeyConflict;
+      if (conflict == null ||
+          conflict.scanned.baseUrl == prev?.pendingKeyConflict?.scanned.baseUrl) {
+        return;
+      }
+      _confirmRekey(context, ref, conflict);
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Client'),
@@ -89,11 +101,41 @@ class _ClientViewState extends ConsumerState<ClientView> {
                       : Icons.radio_button_unchecked),
                   title: Text(server.name),
                   subtitle: Text(server.baseUrl),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => ref
-                        .read(clientControllerProvider.notifier)
-                        .removeServer(server.baseUrl),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Pairing badge (design 001, M5): pinned key = sealed
+                      // transport; keyless host = documented plaintext.
+                      Tooltip(
+                        message: server.hostKey != null
+                            ? 'Encrypted (paired host key)'
+                            : 'Not encrypted (host has no key)',
+                        child: Chip(
+                          avatar: Icon(
+                            server.hostKey != null
+                                ? Icons.lock
+                                : Icons.lock_open,
+                            size: 16,
+                            color: server.hostKey != null
+                                ? Colors.green
+                                : Colors.orange,
+                          ),
+                          label: Text(
+                            server.hostKey != null
+                                ? 'Encrypted'
+                                : 'Not encrypted',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => ref
+                            .read(clientControllerProvider.notifier)
+                            .removeServer(server.baseUrl),
+                      ),
+                    ],
                   ),
                   onTap: () {
                     ref
@@ -151,6 +193,46 @@ class _ClientViewState extends ConsumerState<ClientView> {
       notifier.confirmPendingNonLanServer();
     } else {
       notifier.cancelPendingNonLanServer();
+    }
+  }
+
+  /// Re-pair dialog for a changed host key: explains that the server at
+  /// that address presented a different key than the pinned one, and only
+  /// re-pairs on explicit confirmation.
+  Future<void> _confirmRekey(
+    BuildContext context,
+    WidgetRef ref,
+    ({SavedServer existing, SavedServer scanned}) conflict,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.vpn_key_off, color: Colors.orange),
+        title: const Text('Server key changed'),
+        content: Text(
+          'The server at ${conflict.scanned.name} presented a different '
+          'security key than the one pinned for this address.\n\n'
+          'This can happen when the host app was reinstalled. If you did '
+          'not expect it, someone may be impersonating the server.\n\n'
+          'Re-pair and replace the pinned key?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep old key'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Re-pair'),
+          ),
+        ],
+      ),
+    );
+    final notifier = ref.read(clientControllerProvider.notifier);
+    if (confirmed == true) {
+      notifier.confirmRekey();
+    } else {
+      notifier.cancelRekey();
     }
   }
 
