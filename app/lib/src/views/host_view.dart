@@ -72,6 +72,17 @@ class _HostViewState extends ConsumerState<HostView> {
               ),
               const SizedBox(height: 12),
             ],
+            if (state.warning != null) ...[
+              Card(
+                color: Colors.orange.shade100,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text('Warning: ${state.warning}',
+                      style: const TextStyle(color: Colors.black87)),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Expanded(
               child: state.running && state.url != null
                   ? _runningView(context, ref, state)

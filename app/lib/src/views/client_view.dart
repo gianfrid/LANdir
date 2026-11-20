@@ -106,29 +106,7 @@ class _ClientViewState extends ConsumerState<ClientView> {
                     children: [
                       // Pairing badge (design 001, M5): pinned key = sealed
                       // transport; keyless host = documented plaintext.
-                      Tooltip(
-                        message: server.hostKey != null
-                            ? 'Encrypted (paired host key)'
-                            : 'Not encrypted (host has no key)',
-                        child: Chip(
-                          avatar: Icon(
-                            server.hostKey != null
-                                ? Icons.lock
-                                : Icons.lock_open,
-                            size: 16,
-                            color: server.hostKey != null
-                                ? Colors.green
-                                : Colors.orange,
-                          ),
-                          label: Text(
-                            server.hostKey != null
-                                ? 'Encrypted'
-                                : 'Not encrypted',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
+                      _PairingBadge(paired: server.hostKey != null),
                       IconButton(
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () => ref
@@ -211,7 +189,8 @@ class _ClientViewState extends ConsumerState<ClientView> {
         title: const Text('Server key changed'),
         content: Text(
           'The server at ${conflict.scanned.name} presented a different '
-          'security key than the one pinned for this address.\n\n'
+          'security key — or none at all — than the one pinned for this '
+          'address.\n\n'
           'This can happen when the host app was reinstalled. If you did '
           'not expect it, someone may be impersonating the server.\n\n'
           'Re-pair and replace the pinned key?',
@@ -264,6 +243,35 @@ class _ClientViewState extends ConsumerState<ClientView> {
             child: const Text('Add'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Encrypted / Not encrypted chip shown next to each saved server
+/// (design 001, M5): a pinned host key means sealed transport, a keyless
+/// host stays on the documented plaintext contract.
+class _PairingBadge extends StatelessWidget {
+  const _PairingBadge({required this.paired});
+
+  final bool paired;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message:
+          paired ? 'Encrypted (paired host key)' : 'Not encrypted (no key)',
+      child: Chip(
+        avatar: Icon(
+          paired ? Icons.lock : Icons.lock_open,
+          size: 16,
+          color: paired ? Colors.green : Colors.orange,
+        ),
+        label: Text(
+          paired ? 'Encrypted' : 'Not encrypted',
+          style: const TextStyle(fontSize: 12),
+        ),
+        visualDensity: VisualDensity.compact,
       ),
     );
   }

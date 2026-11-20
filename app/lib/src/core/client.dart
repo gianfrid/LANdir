@@ -89,17 +89,7 @@ class LandirClient {
     req.contentLength = sealed.envelope.length;
     req.add(sealed.envelope);
     final res = await req.close();
-    final chunks = <Uint8List>[];
-    await for (final chunk in res) {
-      chunks.add(Uint8List.fromList(chunk));
-    }
-    final total = chunks.fold<int>(0, (s, c) => s + c.length);
-    final body = Uint8List(total);
-    var offset = 0;
-    for (final c in chunks) {
-      body.setRange(offset, offset + c.length, c);
-      offset += c.length;
-    }
+    final body = await _readAll(res);
     return (res.statusCode, await openResponse(body, sealed.ephKeyPair, key));
   }
 
