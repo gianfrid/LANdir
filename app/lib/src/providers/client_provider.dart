@@ -9,6 +9,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/client.dart';
+import '../core/crypto.dart';
 import '../core/security.dart';
 import '../core/share.dart';
 
@@ -22,12 +23,45 @@ class SavedServer {
   final String name;
   final String baseUrl;
 
-  const SavedServer({required this.name, required this.baseUrl});
+  /// Pinned host key as base64url (no padding), or null for a keyless host
+  /// (a landir.py / Rust host whose QR carries no #k=). Pinned to
+  /// (host, port), never to the per-run token — see [hostPortKey].
+  final String? hostKey;
 
-  SavedServer copyWith({String? name, String? baseUrl}) => SavedServer(
+  const SavedServer({required this.name, required this.baseUrl, this.hostKey});
+
+  /// Identity the pin is bound to: scheme + host + port, token excluded.
+  String get hostPortKey {
+    final uri = Uri.parse(baseUrl);
+    return '${uri.scheme}://${uri.host}:${uri.port}';
+  }
+
+  Uint8List? get hostKeyBytes =>
+      hostKey == null ? null : Uint8List.fromList(base64Url.decode(_pad(hostKey!)));
+
+  SavedServer copyWith({String? name, String? baseUrl, String? hostKey}) =>
+      SavedServer(
         name: name ?? this.name,
         baseUrl: baseUrl ?? this.baseUrl,
+        hostKey: hostKey ?? this.hostKey,
       );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'baseUrl': baseUrl,
+        if (hostKey != null) 'hostKey': hostKey,
+      };
+
+  factory SavedServer.fromJson(Map<String, dynamic> json) => SavedServer(
+        name: json['name'] as String,
+        baseUrl: json['baseUrl'] as String,
+        hostKey: json['hostKey'] as String?,
+      );
+}
+
+String _pad(String s) {
+  final rem = s.length % 4;
+  return rem == 0 ? s : s + '=' * (4 - rem);
 }
 
 /// Client state: saved servers, the currently selected server, and its
@@ -50,6 +84,11 @@ class ClientState {
   /// Held here until the user confirms adding it; null otherwise.
   final SavedServer? pendingNonLanServer;
 
+  /// A rescan presented a different host key for an already-pinned
+  /// (host, port). The add is blocked until the user explicitly re-pairs via
+  /// [ClientController.confirmRekey] (Signal safety-number pattern).
+  final ({SavedServer existing, SavedServer scanned})? pendingKeyConflict;
+
   /// Items received through the platform share sheet while no server was
   /// selected. Uploaded (and the list cleared) as soon as one is.
   final List<IncomingShare> pendingShares;
@@ -64,6 +103,7 @@ class ClientState {
     this.statusMessage,
     this.removedServerUrl,
     this.pendingNonLanServer,
+    this.pendingKeyConflict,
     this.pendingShares = const [],
   });
 
@@ -85,6 +125,8 @@ class ClientState {
     String? removedServerUrl,
     SavedServer? pendingNonLanServer,
     bool clearPendingNonLanServer = false,
+    ({SavedServer existing, SavedServer scanned})? pendingKeyConflict,
+    bool clearPendingKeyConflict = false,
     List<IncomingShare>? pendingShares,
   }) =>
       ClientState(
@@ -98,6 +140,9 @@ class ClientState {
         removedServerUrl: removedServerUrl,
         pendingNonLanServer:
             clearPendingNonLanServer ? null : (pendingNonLanServer ?? this.pendingNonLanServer),
+        pendingKeyConflict: clearPendingKeyConflict
+            ? null
+            : (pendingKeyConflict ?? this.pendingKeyConflict),
         pendingShares: pendingShares ?? this.pendingShares,
       );
 }
@@ -122,18 +167,25 @@ class ClientController extends _$ClientController {
 
   /// Load persisted servers from shared_preferences. Call once on app start.
   /// If a server was selected the last time the app ran, reconnect to it.
+  ///
+  /// Registry format is versioned: v1 is `{'v': 1, 'servers': [...]}` with an
+  /// optional `hostKey` per entry; the legacy bare-list format (pre-pinning)
+  /// migrates with hostKey = null.
   Future<void> loadPersisted() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_serversPrefsKey);
     if (raw != null) {
       try {
-        final list = (jsonDecode(raw) as List<dynamic>)
-            .map((e) => SavedServer(
-                  name: e['name'] as String,
-                  baseUrl: e['baseUrl'] as String,
-                ))
-            .toList();
-        state = state.copyWith(servers: list);
+        final decoded = jsonDecode(raw);
+        final List<dynamic> list;
+        if (decoded is Map<String, dynamic>) {
+          list = (decoded['servers'] as List<dynamic>? ?? const []);
+        } else {
+          list = decoded as List<dynamic>;
+        }
+        final servers =
+            list.map((e) => SavedServer.fromJson(e as Map<String, dynamic>)).toList();
+        state = state.copyWith(servers: servers);
       } catch (_) {}
     }
     final lastUrl = prefs.getString(_lastServerPrefsKey);
@@ -151,31 +203,59 @@ class ClientController extends _$ClientController {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _serversPrefsKey,
-      jsonEncode(servers
-          .map((s) => {'name': s.name, 'baseUrl': s.baseUrl}).toList()),
+      jsonEncode({
+        'v': 1,
+        'servers': servers.map((s) => s.toJson()).toList(),
+      }),
     );
   }
 
   /// Add a server from a URL (typically scanned from a QR code or typed).
-  /// Normalizes the URL to end with '/'.
+  /// Normalizes the URL to end with '/' and extracts the pinned host key
+  /// from the `#k=` fragment when present (design 001, M3).
   ///
   /// URLs pointing outside the LAN (public IP or DNS name) are not added
   /// directly: they land in [ClientState.pendingNonLanServer] and the UI
   /// must confirm them via [confirmPendingNonLanServer]. Landir is
   /// LAN-only; a public address usually means a mistyped or malicious QR.
+  ///
+  /// A scan presenting a different host key for an already-pinned
+  /// (host, port) is blocked into [ClientState.pendingKeyConflict] — the
+  /// user must explicitly re-pair via [confirmRekey].
   void addServer(String rawUrl) {
     var url = rawUrl.trim();
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'http://$url';
     }
-    if (!url.endsWith('/')) url += '/';
-    final name = Uri.parse(url).host;
-    final server = SavedServer(name: name, baseUrl: url);
+    final parsed = parsePairedUrl(url);
+    final url2 = parsed.baseUrl;
+    final name = Uri.parse(url2).host;
+    final server = SavedServer(
+      name: name,
+      baseUrl: url2,
+      hostKey: parsed.hostKey == null
+          ? null
+          : base64Url.encode(parsed.hostKey!).replaceAll('=', ''),
+    );
     if (!isLanHost(name)) {
       state = state.copyWith(pendingNonLanServer: server);
       return;
     }
     _add(server);
+  }
+
+  /// Adopt the rescanned key after a [pendingKeyConflict]: updates the pin
+  /// for that (host, port) and adds/refreshes the server entry.
+  void confirmRekey() {
+    final conflict = state.pendingKeyConflict;
+    if (conflict == null) return;
+    state = state.copyWith(clearPendingKeyConflict: true);
+    _add(conflict.scanned, force: true);
+  }
+
+  /// Discard a [pendingKeyConflict] (user declined to re-pair).
+  void cancelRekey() {
+    state = state.copyWith(clearPendingKeyConflict: true);
   }
 
   /// Add the pending non-LAN server after the user confirmed the warning.
@@ -190,9 +270,30 @@ class ClientController extends _$ClientController {
     state = state.copyWith(clearPendingNonLanServer: true);
   }
 
-  void _add(SavedServer server) {
+  void _add(SavedServer server, {bool force = false}) {
+    // Pin conflict check: same (host, port) with a different host key.
+    // Keyless -> keyed is allowed (host upgraded); keyed -> keyless is
+    // allowed (host downgraded); keyed -> different key blocks for re-pair
+    // unless [force] (the user just confirmed the re-pair explicitly).
+    if (!force) {
+      final sameHostPort = state.servers
+          .where((s) => s.hostPortKey == server.hostPortKey)
+          .toList();
+      for (final existing in sameHostPort) {
+        if (existing.hostKey != null &&
+            server.hostKey != null &&
+            existing.hostKey != server.hostKey) {
+          state = state.copyWith(
+            pendingKeyConflict: (existing: existing, scanned: server),
+            error: null,
+          );
+          return;
+        }
+      }
+    }
     final servers = [
-      ...state.servers.where((s) => s.baseUrl != server.baseUrl),
+      ...state.servers.where((s) =>
+          s.baseUrl != server.baseUrl && s.hostPortKey != server.hostPortKey),
       server
     ];
     state = state.copyWith(
@@ -215,7 +316,7 @@ class ClientController extends _$ClientController {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastServerPrefsKey, server.baseUrl);
     _client?.close();
-    _client = LandirClient(server.baseUrl);
+    _client = LandirClient(server.baseUrl, hostKey: server.hostKeyBytes);
     try {
       final files = await _client!.listDir('');
       state = state.copyWith(files: files, loading: false);
