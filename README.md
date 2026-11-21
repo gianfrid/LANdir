@@ -87,8 +87,14 @@ Every push to `slop` publishes under fixed moving names (see
 - **Image:** `ghcr.io/gianfrid/landir:latest` and `:rolling` (amd64) are
   re-pushed on each build and smoke-tested.
 - **APK:** attached to the persistent **rolling** GitHub Release as
-  `landir-arm64.apk` (asset replaced on each build). Point Obtanium at this
-  repo (github.com/gianfrid/landir) and it will track that release's APK.
+  `landir-arm64.apk` (asset replaced on each build). Add the app to Obtanium
+  with one tap — it will track that release's APK automatically:
+
+  [![Get it on Obtanium](https://raw.githubusercontent.com/ImranR98/Obtanium/main/assets/get-it-on-obtanium.png)](https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%257B%2522id%2522%253A%2520%2522gianfrid.landir%2522%252C%2520%2522url%2522%253A%2520%2522https%253A%252F%252Fgithub.com%252Fgianfrid%252Flandir%2522%252C%2520%2522author%2522%253A%2520%2522gianfrid%2522%252C%2520%2522name%2522%253A%2520%2522LANdir%2522%252C%2520%2522additionalSettings%2522%253A%2520%2522%257B%255C%2522useLatestAssetDateAsReleaseDate%255C%2522%253A%2520true%252C%255C%2522releaseDateAsVersion%255C%2522%253A%2520true%257D%2522%257D)
+
+  The link pre-configures Obtanium to take the version from the newest asset
+  upload date (the rolling tag and title never change, so the APK's upload
+  timestamp — shown as a unix version string — is what makes updates detectable).
 
 ### Publishing on a different host port
 
