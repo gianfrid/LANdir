@@ -150,15 +150,16 @@ and client (role #2) for Android, iOS, and Linux desktop. The security-critical
 core (`app/lib/src/core/`) is pure Dart, tested against golden vectors exported
 from `landir.py` via `scripts/export_golden.py`.
 
-**App = secure path; browser = documented plaintext.** The app host carries a
-long-term X25519 host key in the QR fragment (`#k=`) and serves sealed
-endpoints; app clients pin that key and seal every request (see
+**App = secure path; browser = documented plaintext.** The app host has an
+**encryption mode** (default on, toggleable in the host view). With it on, the
+QR carries a long-term X25519 host key (`#k=`), only the app can connect, and
+files are not readable — or writable — without the key: every plaintext route
+answers 404 (see
 [docs/design/001-qr-paired-app-encryption.md](docs/design/001-qr-paired-app-encryption.md)
-and [ADR 0003](docs/adr/0003-sealed-app-endpoints.md)). A plain browser scanning
-the same QR gets the same plaintext HTTP page as the CLI servers — over plain
-HTTP on the LAN that page is not authenticated, which is why the encrypted path
-exists only in the app. CLI hosts (`landir.py`, Rust) have no key and keep the
-plaintext contract unchanged.
+and [ADR 0003](docs/adr/0003-sealed-app-endpoints.md)). Turn the mode off and
+the host serves the same plaintext HTTP contract as the CLI servers — anyone
+with the URL, browsers included, can connect. CLI hosts (`landir.py`, Rust) have
+no key and always serve that plaintext contract.
 
 ```bash
 cd app

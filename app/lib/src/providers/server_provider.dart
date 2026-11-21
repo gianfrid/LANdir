@@ -30,6 +30,12 @@ class ServerState {
   final int requestedPort; // port for the next start; 0 = pick a free one
   final String? url;
   final String? token;
+
+  /// Whether encryption mode is on for the next start (design 001): the
+  /// QR/URL carries the host key (`#k=`) and only the sealed endpoints
+  /// answer; off means a keyless, plaintext host like the CLI servers.
+  /// Default on: encryption is the reason the app host exists.
+  final bool encrypted;
   final bool insecure;
   final String? error;
 
@@ -48,6 +54,7 @@ class ServerState {
     this.requestedPort = 8000,
     this.url,
     this.token,
+    this.encrypted = true,
     this.insecure = false,
     this.error,
     this.warning,
@@ -61,6 +68,7 @@ class ServerState {
     int? requestedPort,
     String? url,
     String? token,
+    bool? encrypted,
     bool? insecure,
     // Null clears the error, so a sentinel marks "argument not given".
     Object? error = _unsetError,
@@ -75,6 +83,7 @@ class ServerState {
         requestedPort: requestedPort ?? this.requestedPort,
         url: url ?? this.url,
         token: token ?? this.token,
+        encrypted: encrypted ?? this.encrypted,
         insecure: insecure ?? this.insecure,
         error: identical(error, _unsetError)
             ? this.error
@@ -138,15 +147,22 @@ class ServerController extends _$ServerController {
       Directory(uploadDir).createSync(recursive: true);
 
       final token = state.insecure ? null : _generateToken();
+      final encrypted = state.encrypted;
       final config = ServerConfig(
         port: state.requestedPort,
         uploadDir: uploadDir,
         insecure: state.insecure,
         secretToken: token,
+        encrypted: encrypted,
       );
       // Host key (design 001, M1): generated once and persisted in the
-      // app-support directory — never under uploads/.
-      final hostKey = await HostKeyStore(appDir.path).loadOrCreate();
+      // app-support directory — never under uploads/. Only loaded in
+      // encryption mode: there it is the ONLY way in (plaintext endpoints
+      // answer 404); with the mode off the host is keyless, like the CLI
+      // servers, and the key is never shown.
+      final hostKey = encrypted
+          ? await HostKeyStore(appDir.path).loadOrCreate()
+          : null;
       _server = LANdirServer(config, sink, hostKey: hostKey);
       await _server!.start();
       final port = _server!.boundPort;
@@ -159,12 +175,11 @@ class ServerController extends _$ServerController {
       }
 
       final addr = await findBestAddress();
-      // Advertise the host key in the QR fragment when it fits the encoder
-      // capacity; otherwise fall back to the keyless URL and warn — the
-      // client will pair without encryption, which the user must know.
-      final withKey = advertisedUrlWithKey(addr.address, port, token, hostKey.publicKey);
-      final url = withKey ?? advertisedUrl(addr.address, port, token);
-      final warning = withKey == null
+      final url = encrypted
+          ? (advertisedUrlWithKey(addr.address, port, token, hostKey!.publicKey) ??
+              advertisedUrl(addr.address, port, token))
+          : advertisedUrl(addr.address, port, token);
+      final warning = encrypted && !url.contains('#k=')
           ? 'The address is too long for the QR code, so the host key was '
               'omitted: app clients will connect WITHOUT encryption.'
           : null;
@@ -192,10 +207,11 @@ class ServerController extends _$ServerController {
     if (Platform.isAndroid) {
       await FlutterForegroundTask.stopService();
     }
-    // Keep the user's port and Save directory choices (and the error)
-    // out of the reset: they are preferences, not runtime state.
+    // Keep the user's port, encryption, and Save directory choices (and
+    // the error) out of the reset: they are preferences, not runtime state.
     state = ServerState(
       requestedPort: state.requestedPort,
+      encrypted: state.encrypted,
       saveDir: state.saveDir,
     );
   }
@@ -224,6 +240,22 @@ class ServerController extends _$ServerController {
   }
 
   static const _requestedPortPrefsKey = 'requested_port';
+  static const _encryptedPrefsKey = 'encrypted';
+
+  /// Toggle encryption mode (only changeable while stopped; persists
+  /// across app restarts like the port and Save directory choices): on =
+  /// QR carries the host key and only sealed clients get in; off = a
+  /// keyless, plaintext host that browsers and CLI peers can use.
+  void toggleEncrypted() {
+    if (state.running) return;
+    state = state.copyWith(encrypted: !state.encrypted);
+    unawaited(_saveEncrypted(state.encrypted));
+  }
+
+  Future<void> _saveEncrypted(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_encryptedPrefsKey, value);
+  }
 
   /// Select the port for the next start. 0 means the server picks a free
   /// dynamic-range port itself. Only changeable while stopped; persists
@@ -251,6 +283,7 @@ class ServerController extends _$ServerController {
     // given" there, but here it clears the choice.
     state = ServerState(
       requestedPort: state.requestedPort,
+      encrypted: state.encrypted,
       insecure: state.insecure,
       saveDir: normalized,
     );
@@ -278,6 +311,10 @@ class ServerController extends _$ServerController {
     final savedDir = prefs.getString(_saveDirPrefsKey);
     if (savedDir != null && savedDir.isNotEmpty) {
       state = state.copyWith(saveDir: savedDir);
+    }
+    final savedEncrypted = prefs.getBool(_encryptedPrefsKey);
+    if (savedEncrypted != null) {
+      state = state.copyWith(encrypted: savedEncrypted);
     }
   }
 

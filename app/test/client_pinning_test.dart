@@ -172,7 +172,11 @@ void main() {
     File('$tmpDir/secret.txt').writeAsStringSync('s3cret');
     final server = LANdirServer(
       ServerConfig(
-          port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'tok'),
+          port: 0,
+          uploadDir: tmpDir,
+          insecure: false,
+          secretToken: 'tok',
+          encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
     );
@@ -190,7 +194,11 @@ void main() {
       () async {
     final server = LANdirServer(
       ServerConfig(
-          port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'tok'),
+          port: 0,
+          uploadDir: tmpDir,
+          insecure: false,
+          secretToken: 'tok',
+          encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
     );

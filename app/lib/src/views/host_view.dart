@@ -160,11 +160,34 @@ class _HostViewState extends ConsumerState<HostView> {
           children: [
             const Text('Secret URL mode'),
             Switch(
+              // Keyed so tests can tell the two mode switches apart.
+              key: const ValueKey('secret_mode_switch'),
               value: !state.insecure,
               onChanged: (_) =>
                   ref.read(serverControllerProvider.notifier).toggleInsecure(),
             ),
           ],
+        ),
+        Tooltip(
+          message:
+              'On: the QR code carries the host key and only the app can '
+              'connect — browsers cannot read or upload files.\n'
+              'Off: anyone with the URL (browsers included) can connect '
+              'over plaintext HTTP.',
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text('Encryption'),
+              Switch(
+                key: const ValueKey('encryption_mode_switch'),
+                value: state.encrypted,
+                onChanged: (_) => ref
+                    .read(serverControllerProvider.notifier)
+                    .toggleEncrypted(),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         FilledButton.icon(

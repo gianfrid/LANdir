@@ -121,6 +121,58 @@ void main() {
       expect(ServerConfig.isValidPort(p), isFalse, reason: 'port $p');
     }
   });
+
+  test('encryption mode defaults on and toggles while stopped', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = notifierOf(container);
+
+    // Default on: encryption is the reason the app host exists.
+    expect(container.read(serverControllerProvider).encrypted, isTrue);
+    notifier.toggleEncrypted();
+    expect(container.read(serverControllerProvider).encrypted, isFalse);
+    // The other preferences survive the toggle.
+    notifier.setPort(9000);
+    notifier.toggleEncrypted();
+    final state = container.read(serverControllerProvider);
+    expect(state.encrypted, isTrue);
+    expect(state.requestedPort, 9000);
+  });
+
+  test('toggleEncrypted is ignored while the server is running', () {
+    final container = ProviderContainer(
+      overrides: [serverControllerProvider.overrideWith(_Running.new)],
+    );
+    addTearDown(container.dispose);
+    notifierOf(container).toggleEncrypted();
+    final state = container.read(serverControllerProvider);
+    expect(state.running, isTrue);
+    expect(state.encrypted, isTrue); // unchanged
+  });
+
+  test('stop() keeps the encryption choice for the next start', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = notifierOf(container);
+
+    notifier.toggleEncrypted(); // off
+    // A regression to `const ServerState()` here would reset to on.
+    notifier.stop();
+    expect(container.read(serverControllerProvider).encrypted, isFalse);
+  });
+
+  test('loadPersistedSettings restores the encryption choice', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = notifierOf(container);
+
+    notifier.toggleEncrypted(); // off — persists fire-and-forget
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final container2 = ProviderContainer();
+    addTearDown(container2.dispose);
+    await notifierOf(container2).loadPersistedSettings();
+    expect(container2.read(serverControllerProvider).encrypted, isFalse);
+  });
 }
 
 /// A controller that reports a running server without binding anything.

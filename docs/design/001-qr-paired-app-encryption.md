@@ -14,13 +14,22 @@ citations: [docs/research/001-encryption-over-http-without-tls.md](../research/0
    TOFU window — the CurveCP/WireGuard shape, where an active MITM degrades
    to denial of service [6][8].
 2. **Encryption ships for app clients only.** Generic browsers stay on the
-   plaintext HTTP contract. This is structural, not a compromise: nothing in
-   the web platform authenticates first-load JS over plain HTTP (SRI §5.1
-   kills its own mechanism on insecure contexts [21]; WebCrypto's own
-   security considerations push the fix to TLS [18][19][20][21]).
+   plaintext HTTP contract when the host's encryption mode is OFF. This is
+   structural, not a compromise: nothing in the web platform authenticates
+   first-load JS over plain HTTP (SRI §5.1 kills its own mechanism on
+   insecure contexts [21]; WebCrypto's own security considerations push
+   the fix to TLS [18][19][20][21]). With the mode ON the browser cannot
+   participate at all — every plaintext route is a blind 404 — so files
+   are not readable without the key.
 3. The browser TLS question (self-signed cert, optionally with auth
    material embedded in it) was analyzed and **rejected as default**;
    see "Browser variants considered and rejected".
+4. **Encryption mode is a host toggle** (added post-M6): the key is shown
+   (`#k=` in QR/URL) and the sealed endpoints serve only when the mode is
+   enabled; with it disabled the host is keyless and plaintext like the
+   CLI servers. Default ON. In encryption mode the plaintext endpoints
+   (page, `files`, `ls`, `fl`, `upload`) answer 404: nothing is readable
+   or writable without the key.
 
 ## Architecture
 

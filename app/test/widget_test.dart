@@ -51,24 +51,53 @@ void main() {
     } else {
       expect(find.text('Save files to'), findsNothing);
     }
-    expect(find.byType(Switch), findsOneWidget);
-    // Secret mode is on by default: switch is on
-    final switchWidget = tester.widget<Switch>(find.byType(Switch));
-    expect(switchWidget.value, isTrue);
+    // The two mode switches: Secret URL mode and Encryption.
+    final secretSwitch =
+        tester.widget<Switch>(find.byKey(const ValueKey('secret_mode_switch')));
+    expect(secretSwitch.value, isTrue);
+    final encryptionSwitch = tester.widget<Switch>(
+        find.byKey(const ValueKey('encryption_mode_switch')));
+    // Encryption defaults on: it is the reason the app host exists.
+    expect(encryptionSwitch.value, isTrue);
   });
 
-  testWidgets('toggling the switch flips insecure mode', (tester) async {
+  testWidgets('toggling the secret switch flips insecure mode', (tester) async {
     usePhoneViewport(tester);
     await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
 
     await tester.tap(find.text('Host'));
     await tester.pump();
 
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.byKey(const ValueKey('secret_mode_switch')));
     await tester.pump();
 
-    final switchWidget = tester.widget<Switch>(find.byType(Switch));
-    expect(switchWidget.value, isFalse);
+    final secretSwitch =
+        tester.widget<Switch>(find.byKey(const ValueKey('secret_mode_switch')));
+    expect(secretSwitch.value, isFalse);
+    // The encryption switch is untouched by a secret-mode toggle.
+    final encryptionSwitch = tester.widget<Switch>(
+        find.byKey(const ValueKey('encryption_mode_switch')));
+    expect(encryptionSwitch.value, isTrue);
+  });
+
+  testWidgets('the encryption switch toggles the mode', (tester) async {
+    usePhoneViewport(tester);
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
+
+    await tester.tap(find.text('Host'));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('encryption_mode_switch')));
+    await tester.pump();
+    var encryptionSwitch = tester.widget<Switch>(
+        find.byKey(const ValueKey('encryption_mode_switch')));
+    expect(encryptionSwitch.value, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('encryption_mode_switch')));
+    await tester.pump();
+    encryptionSwitch = tester.widget<Switch>(
+        find.byKey(const ValueKey('encryption_mode_switch')));
+    expect(encryptionSwitch.value, isTrue);
   });
 
   testWidgets('host port field defaults to 8000 and commits entered ports',

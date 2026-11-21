@@ -26,12 +26,20 @@ class ServerConfig {
   final String? secretToken;
   final int? maxUploadBytes; // null = no limit (desktop parity)
 
+  /// Encryption mode (app-host-only, ADR 0003): when true the host serves
+  /// ONLY the sealed endpoints — every plaintext endpoint (page, files,
+  /// ls, fl, upload) answers 404, so files are not readable without the
+  /// host key carried in the QR fragment. When false the host behaves
+  /// like a CLI host: plaintext everywhere, no sealed endpoints.
+  final bool encrypted;
+
   ServerConfig({
     this.port = 8000,
     required this.uploadDir,
     this.insecure = false,
     this.secretToken,
     this.maxUploadBytes,
+    this.encrypted = false,
   });
 
   String get pagePath => secretToken != null ? '/$secretToken/' : '/';
@@ -114,6 +122,13 @@ class LANdirServer {
   }
 
   Future<void> _handleGet(HttpRequest req, String base) async {
+    // Encryption mode: files must not be readable without the key — every
+    // plaintext route (page included) is a blind 404, indistinguishable
+    // from secret mode's unknown-path response.
+    if (config.encrypted) {
+      _sendError(req, 404);
+      return;
+    }
     final token = config.secretToken;
     if (token != null && base == '/$token') {
       // Redirect to add trailing slash so relative URLs resolve
@@ -170,6 +185,12 @@ class LANdirServer {
   Future<void> _handlePost(HttpRequest req, String base) async {
     if (base != config.uploadPath) {
       await _handleSealedPost(req, base);
+      return;
+    }
+    // Encryption mode: uploads are as sealed as reads (an unauthenticated
+    // plaintext write is just as out of place as a plaintext read).
+    if (config.encrypted) {
+      _sendError(req, 404);
       return;
     }
     final ctype = req.headers.value('content-type') ?? '';
@@ -258,6 +279,7 @@ class LANdirServer {
     final host = hostKey;
     final p = config.pagePath;
     final isSealed = host != null &&
+        config.encrypted &&
         (base == '${p}supload' ||
             base == '${p}sfiles' ||
             base == '${p}sls' ||

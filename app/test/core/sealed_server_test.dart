@@ -64,7 +64,11 @@ void main() {
     hostKey = await HostKeyStore(keyDir.path).loadOrCreate();
     server = LANdirServer(
       ServerConfig(
-          port: 0, uploadDir: tmpDir, insecure: false, secretToken: token),
+          port: 0,
+          uploadDir: tmpDir,
+          insecure: false,
+          secretToken: token,
+          encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
     );
@@ -147,6 +151,68 @@ void main() {
     expect(status, 404);
   });
 
+  test('encrypted host: NOTHING plaintext is readable or writable', () async {
+    // A browser (or an unpaired attacker who learns the URL) must see the
+    // same blind 404 everywhere — page, listing, download, and upload.
+    final paths = <(String, String)>[
+      ('GET', '/'),
+      ('GET', '/files'),
+      ('GET', '/ls/'),
+      ('GET', '/fl/hello.txt'),
+      ('POST', '/upload',),
+    ];
+    for (final (method, path) in paths) {
+      final url = Uri.parse('http://127.0.0.1:${server.boundPort}/$token$path');
+      final HttpClientRequest req;
+      if (method == 'GET') {
+        req = await client.getUrl(url);
+      } else {
+        req = await client.postUrl(url);
+        req.headers.set(
+            'Content-Type', 'multipart/form-data; boundary=x');
+        req.add(List.filled(10, 0x61));
+      }
+      final res = await req.close();
+      await res.drain();
+      expect(res.statusCode, 404, reason: '$method $path must be blind');
+    }
+    // The token itself does not redirect anywhere readable either.
+    final res = await client
+        .getUrl(Uri.parse('http://127.0.0.1:${server.boundPort}/$token'));
+    final r2 = await res.close();
+    await r2.drain();
+    expect(r2.statusCode, 404);
+  });
+
+  test('hostKey without the mode on behaves keyless on the wire', () async {
+    final keyIgnored = LANdirServer(
+      ServerConfig(
+          port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'kk'),
+      DirectoryFileSink(tmpDir),
+      hostKey: hostKey,
+    );
+    await keyIgnored.start();
+    try {
+      // Plain access works...
+      final res = await client.getUrl(
+          Uri.parse('http://127.0.0.1:${keyIgnored.boundPort}/kk/files'));
+      final r2 = await res.close();
+      expect(r2.statusCode, 200);
+      await r2.drain();
+      // ...and the sealed endpoints stay closed (no mode, no key on the wire).
+      final req = await client.postUrl(
+          Uri.parse('http://127.0.0.1:${keyIgnored.boundPort}/kk/sfiles'));
+      final sealed = await sealToHost(Uint8List(0), hostKey.publicKey);
+      req.contentLength = sealed.envelope.length;
+      req.add(sealed.envelope);
+      final r3 = await req.close();
+      await r3.drain();
+      expect(r3.statusCode, 404);
+    } finally {
+      await keyIgnored.stop();
+    }
+  });
+
   test('keyless host answers 404 on sealed endpoints', () async {
     final keyless = LANdirServer(
       ServerConfig(
@@ -175,7 +241,8 @@ void main() {
           uploadDir: tmpDir,
           insecure: false,
           secretToken: 'lim',
-          maxUploadBytes: 16),
+          maxUploadBytes: 16,
+          encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
     );

@@ -26,7 +26,11 @@ void main() {
     hostKey = await HostKeyStore(keyDir.path).loadOrCreate();
     server = LANdirServer(
       ServerConfig(
-          port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'tok'),
+          port: 0,
+          uploadDir: tmpDir,
+          insecure: false,
+          secretToken: 'tok',
+          encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
     );
