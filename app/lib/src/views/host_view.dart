@@ -36,6 +36,16 @@ class _HostViewState extends ConsumerState<HostView> {
     ref.read(serverControllerProvider.notifier).setSaveDir(path);
   }
 
+  /// Copy the advertised URL so it can be pasted into a browser on
+  /// another device (the QR code is not always scannable).
+  Future<void> _copyUrl(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('URL copied')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(serverControllerProvider);
@@ -178,10 +188,23 @@ class _HostViewState extends ConsumerState<HostView> {
           backgroundColor: Colors.white,
         ),
         const SizedBox(height: 16),
-        SelectableText(
-          state.url!,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: SelectableText(
+                state.url!,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.copy),
+              tooltip: 'Copy URL',
+              onPressed: () => _copyUrl(state.url!),
+            ),
+          ],
         ),
         if (state.hotspotSsid != null) ...[
           const SizedBox(height: 8),
