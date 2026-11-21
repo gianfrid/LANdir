@@ -23,11 +23,11 @@ use it.
   (`app/`). The set of supported devices and runtimes is expected to grow;
   new hosts are added by porting the same behavior, not by redefining the
   project.
-- **One behavior, many implementations.** The Python, Rust, and Dart hosts
-  must stay behaviorally identical — same CLI/UX, endpoints, security rules —
-  so the directory feels the same from every device. `landir.py` is the
-  reference: a behavior change lands there first (with tests), then is
-  ported. Parity is the invariant that serves the goal, not the goal itself.
+- **Interoperability, not identical flags.** The Python, Rust, and Dart
+  hosts must interoperate — same endpoints and security rules, so any
+  browser or app client works against any host. Identical CLI flags are a
+  means to that end, not the objective. `landir.py` is the reference: a
+  behavior change lands there first (with tests), then is ported.
 
 ## Layout
 
@@ -132,10 +132,9 @@ only front it with software you trust on a network you trust.
 
 ## Rust build (local)
 
-The Rust implementation (`src/`, Cargo project) is the same server — same
-flags, same endpoints, same security rules — built on axum/tokio. Unlike the
-Python file it is distributed as a container image, so it uses crates
-(versions pinned in `Cargo.lock`).
+The Rust implementation (`src/`, Cargo project) is the same server as
+`landir.py`, built on axum/tokio. Unlike the Python file it is distributed
+as a container image, so it uses crates (versions pinned in `Cargo.lock`).
 
 ```bash
 cargo build --release   # native binary
@@ -181,54 +180,11 @@ flutter build linux --release     # Linux desktop bundle
 
 See [GLOSSARY.md](GLOSSARY.md) for terminology.
 
-**Remaining release tasks** (need accounts/keys, not code):
-
-- **Android release signing:** configure a release keystore in
-  `app/android/app/build.gradle.kts` (currently debug-signed), then
-  `flutter build apk --release`.
-- **iOS distribution:** Apple Developer enrollment, then
-  `flutter build ios --release` / TestFlight.
-- **Linux AppImage:** package the `flutter build linux --release` bundle as an
-  AppImage (icon already at `app/linux/runner/resources/app_icon.png`).
-- **Device matrix:** document tested Android OEMs (background-killer behavior)
-  and iOS versions.
-
 > **Platform caveats:** on iOS the server runs only while the app is in the foreground (Apple suspends backgrounded apps — shown as an in-app warning). On Android a foreground service keeps it alive, but some OEMs (MIUI et al.) may still kill it. AP client isolation on some Wi-Fi networks blocks phone↔phone traffic regardless of app (same LAN caveat as the desktop version). See [ADR 0001](docs/adr/0001-flutter-multiplatform.md).
-
-## Supply chain
-
-- `SBOM.spdx.json` — SPDX SBOM of every third-party crate (regenerate after any
-  dependency change with `cargo sbom > SBOM.spdx.json`, requires `cargo install cargo-sbom`)
-- `cargo audit` — vulnerability scan of `Cargo.lock` against the RustSec
-  advisory database (requires `cargo install cargo-audit`); currently clean
-- The container base is `gcr.io/distroless/static-debian13` pinned by
-  **digest** (multi-arch index) in the `Containerfile`; on GitHub, Dependabot
-  keeps tag+digest and Cargo deps updated automatically (`.github/dependabot.yml`).
-  Offline fallback: `./scripts/update-distroless-digest.sh`
-
-## CI / automation (GitHub, free for public repos)
-
-- `.github/workflows/ci.yml` — on every push/PR: Python unittest suite, `cargo test
-  --locked`, `cargo audit`, SBOM freshness check (normalized diff)
-- `.github/workflows/rolling.yml` — on every push to `slop`: release-signed APK
-  published to the persistent `rolling` release (for Obtanium), plus the amd64
-  container image built, smoke-tested, and re-pushed as
-  `ghcr.io/gianfrid/landir:latest` / `:rolling`
-- `.github/workflows/arm64-monthly.yml` — monthly (cron): arm64 container image
-  pushed as `ghcr.io/gianfrid/landir:arm64`
-- `.github/workflows/release.yml` — on `v*` tags: signed release APK attached to a
-  GitHub Release
-- `.github/dependabot.yml` — weekly updates for the `docker` (Containerfile
-  FROM lines, tag+digest) and `cargo` (Cargo.lock) ecosystems
-- **Emulator CI (open task):** `adb forward` + Python probes against an
-  emulator in GitHub Actions
 
 ## See Also
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Technical architecture of all three implementations
-- [SPEC.md](SPEC.md) — Security rules, testing, and conventions
 - [GLOSSARY.md](GLOSSARY.md) — Project terminology
-- [docs/adr/0001-flutter-multiplatform.md](docs/adr/0001-flutter-multiplatform.md) — Why the app is Flutter, and its deliberate platform limitations
 
 ## License
 

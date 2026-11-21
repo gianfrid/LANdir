@@ -3,10 +3,10 @@
 LANdir's goal is a shared network directory usable from any device (see
 "Scope" in [README.md](README.md)). It is delivered through interchangeable
 host implementations — `landir.py` (Python, the reference), `src/` (Rust,
-containerized), and `app/` (Flutter, phone/desktop) — which must stay
-behaviorally identical: same CLI/UX, endpoints, and security rules (see
-[SPEC.md](SPEC.md)). `landir.py` is the reference: any behavior change lands
-there first (with tests), then is ported to Rust and Dart.
+containerized), and `app/` (Flutter, phone/desktop) — that must interoperate:
+same endpoints and security rules (see [SPEC.md](SPEC.md)), so any client
+works against any host. `landir.py` is the reference: a behavior change
+lands there first (with tests), then is ported.
 
 ## Shared endpoint model (all implementations)
 
