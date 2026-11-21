@@ -24,7 +24,7 @@ _Avoid_: Peer (implies symmetric roles, which LANdir is not).
 ## Server concepts
 
 **Secret mode**:
-The default operating mode where the page and upload endpoint live under a fresh random token path (`/<token>/`) and every other path returns 404. Disabled with `--insecure` on the desktop implementations.
+The default operating mode where the page and upload endpoint live under a fresh random token path (`/<token>/`) and every other path returns 404. Disabled with `--insecure` on the desktop implementations. On the app host it applies only with encryption mode OFF — encrypted hosts are key-only and skip the token entirely (fixed root paths, ADR 0003).
 _Avoid_: Auth mode, password mode (it is a capability URL, not authentication).
 
 **FileSink**:

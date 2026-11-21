@@ -155,25 +155,31 @@ class _HostViewState extends ConsumerState<HostView> {
           ),
         ],
         const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('Secret URL mode'),
-            Switch(
-              // Keyed so tests can tell the two mode switches apart.
-              key: const ValueKey('secret_mode_switch'),
-              value: !state.insecure,
-              onChanged: (_) =>
-                  ref.read(serverControllerProvider.notifier).toggleInsecure(),
-            ),
-          ],
-        ),
+        // Secret URL mode is a keyless-host concern: with encryption on,
+        // the fixed /s* paths carry the key as the only gate, so there is
+        // no token to toggle — hide the switch until encryption is off.
+        if (!state.encrypted)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Secret URL mode'),
+              Switch(
+                // Keyed so tests can tell the two mode switches apart.
+                key: const ValueKey('secret_mode_switch'),
+                value: !state.insecure,
+                onChanged: (_) =>
+                    ref.read(serverControllerProvider.notifier).toggleInsecure(),
+              ),
+            ],
+          ),
         Tooltip(
           message:
               'On: the QR code carries the host key and only the app can '
-              'connect — browsers cannot read or upload files.\n'
-              'Off: anyone with the URL (browsers included) can connect '
-              'over plaintext HTTP.',
+              'connect via the fixed paths — browsers cannot read or upload '
+              'files, no token involved.\n'
+              'Off: keyless host — anyone with the URL (browsers included) '
+              'connects over plaintext HTTP, and Secret URL mode controls '
+              'the token path.',
           child: Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,

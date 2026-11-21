@@ -24,18 +24,16 @@ void main() {
     final keyDir = Directory.systemTemp.createTempSync('landir_sealed_ckey_');
     addTearDown(() => keyDir.deleteSync(recursive: true));
     hostKey = await HostKeyStore(keyDir.path).loadOrCreate();
+    // Disentangled semantics (ADR 0003): encrypted host = key only, fixed
+    // root paths, no token.
     server = LANdirServer(
       ServerConfig(
-          port: 0,
-          uploadDir: tmpDir,
-          insecure: false,
-          secretToken: 'tok',
-          encrypted: true),
+          port: 0, uploadDir: tmpDir, insecure: true, encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
     );
     await server.start();
-    baseUrl = 'http://127.0.0.1:${server.boundPort}/tok/';
+    baseUrl = 'http://127.0.0.1:${server.boundPort}/';
   });
 
   tearDownAll(() async {

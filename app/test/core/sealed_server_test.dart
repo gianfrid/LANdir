@@ -55,26 +55,23 @@ void main() {
   late LANdirServer server;
   late HttpClient client;
   late String base;
-  const token = 'testtoken';
 
   setUpAll(() async {
     tmpDir = Directory.systemTemp.createTempSync('landir_sealed_test_').path;
     final keyDir = Directory.systemTemp.createTempSync('landir_sealed_key_');
     addTearDown(() => keyDir.deleteSync(recursive: true));
     hostKey = await HostKeyStore(keyDir.path).loadOrCreate();
+    // Disentangled semantics (ADR 0003): an encrypted host is key-only —
+    // fixed root paths, no token anywhere.
     server = LANdirServer(
       ServerConfig(
-          port: 0,
-          uploadDir: tmpDir,
-          insecure: false,
-          secretToken: token,
-          encrypted: true),
+          port: 0, uploadDir: tmpDir, insecure: true, encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
     );
     await server.start();
     client = HttpClient();
-    base = 'http://127.0.0.1:${server.boundPort}/$token/';
+    base = 'http://127.0.0.1:${server.boundPort}/';
   });
 
   tearDownAll(() async {
@@ -162,7 +159,7 @@ void main() {
       ('POST', '/upload',),
     ];
     for (final (method, path) in paths) {
-      final url = Uri.parse('http://127.0.0.1:${server.boundPort}/$token$path');
+      final url = Uri.parse('http://127.0.0.1:${server.boundPort}$path');
       final HttpClientRequest req;
       if (method == 'GET') {
         req = await client.getUrl(url);
@@ -176,12 +173,6 @@ void main() {
       await res.drain();
       expect(res.statusCode, 404, reason: '$method $path must be blind');
     }
-    // The token itself does not redirect anywhere readable either.
-    final res = await client
-        .getUrl(Uri.parse('http://127.0.0.1:${server.boundPort}/$token'));
-    final r2 = await res.close();
-    await r2.drain();
-    expect(r2.statusCode, 404);
   });
 
   test('hostKey without the mode on behaves keyless on the wire', () async {
@@ -239,8 +230,7 @@ void main() {
       ServerConfig(
           port: 0,
           uploadDir: tmpDir,
-          insecure: false,
-          secretToken: 'lim',
+          insecure: true,
           maxUploadBytes: 16,
           encrypted: true),
       DirectoryFileSink(tmpDir),
@@ -255,8 +245,8 @@ void main() {
       ];
       final sealed = await sealToHost(
           Uint8List.fromList(inner), hostKey.publicKey);
-      final req = await client.postUrl(
-          Uri.parse('http://127.0.0.1:${limited.boundPort}/lim/supload'));
+      final req = await client
+          .postUrl(Uri.parse('http://127.0.0.1:${limited.boundPort}/supload'));
       req.contentLength = sealed.envelope.length;
       req.add(sealed.envelope);
       final res = await req.close();

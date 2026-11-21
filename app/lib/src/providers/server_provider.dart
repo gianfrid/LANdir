@@ -146,21 +146,26 @@ class ServerController extends _$ServerController {
       final uploadDir = '${appDir.path}/uploads';
       Directory(uploadDir).createSync(recursive: true);
 
-      final token = state.insecure ? null : _generateToken();
-      final encrypted = state.encrypted;
+      // Disentangled access controls (ADR 0003): an encrypted host uses
+      // fixed root paths with the host key as the ONLY gate — no token is
+      // generated, so the Secret URL mode choice is inert while the mode
+      // is on. A keyless host keeps the CLI hosts' contract, where the
+      // token is the capability.
+      final token =
+          (state.encrypted || state.insecure) ? null : _generateToken();
       final config = ServerConfig(
         port: state.requestedPort,
         uploadDir: uploadDir,
-        insecure: state.insecure,
+        insecure: token == null,
         secretToken: token,
-        encrypted: encrypted,
+        encrypted: state.encrypted,
       );
       // Host key (design 001, M1): generated once and persisted in the
       // app-support directory — never under uploads/. Only loaded in
       // encryption mode: there it is the ONLY way in (plaintext endpoints
       // answer 404); with the mode off the host is keyless, like the CLI
       // servers, and the key is never shown.
-      final hostKey = encrypted
+      final hostKey = state.encrypted
           ? await HostKeyStore(appDir.path).loadOrCreate()
           : null;
       _server = LANdirServer(config, sink, hostKey: hostKey);
@@ -175,13 +180,16 @@ class ServerController extends _$ServerController {
       }
 
       final addr = await findBestAddress();
-      final url = encrypted
-          ? (advertisedUrlWithKey(addr.address, port, token, hostKey!.publicKey) ??
-              advertisedUrl(addr.address, port, token))
+      final url = state.encrypted
+          ? (advertisedUrlWithKey(addr.address, port, null, hostKey!.publicKey) ??
+              advertisedUrl(addr.address, port, null))
           : advertisedUrl(addr.address, port, token);
-      final warning = encrypted && !url.contains('#k=')
-          ? 'The address is too long for the QR code, so the host key was '
-              'omitted: app clients will connect WITHOUT encryption.'
+      // In encryption mode the key is the only gate: if it does not fit the
+      // QR, no client can pair at all (everything else answers 404).
+      final warning = state.encrypted && !url.contains('#k=')
+          ? 'The address is too long for the QR code, so the host key could '
+              'not be included. App clients will NOT be able to connect — '
+              'use a shorter address or turn Encryption off.'
           : null;
 
       state = state.copyWith(

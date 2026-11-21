@@ -174,8 +174,7 @@ void main() {
       ServerConfig(
           port: 0,
           uploadDir: tmpDir,
-          insecure: false,
-          secretToken: 'tok',
+          insecure: true,
           encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
@@ -184,7 +183,7 @@ void main() {
     addTearDown(() => server.stop());
 
     controller.addServer(
-        'http://127.0.0.1:${server.boundPort}/tok/${keyFragment()}');
+        'http://127.0.0.1:${server.boundPort}/${keyFragment()}');
     await controller.selectServer(stateOf(container).servers.first);
     expect(stateOf(container).error, isNull);
     expect(stateOf(container).files.any((f) => f.name == 'secret.txt'), isTrue);
@@ -196,8 +195,7 @@ void main() {
       ServerConfig(
           port: 0,
           uploadDir: tmpDir,
-          insecure: false,
-          secretToken: 'tok',
+          insecure: true,
           encrypted: true),
       DirectoryFileSink(tmpDir),
       hostKey: hostKey,
@@ -212,7 +210,7 @@ void main() {
         '#k=${base64Url.encode(wrongKey.publicKey).replaceAll('=', '')}';
 
     controller.addServer(
-        'http://127.0.0.1:${server.boundPort}/tok/$wrongFrag');
+        'http://127.0.0.1:${server.boundPort}/$wrongFrag');
     await controller.selectServer(stateOf(container).servers.first);
     expect(stateOf(container).error, isNotNull); // sealed listing failed, not plaintext
     expect(stateOf(container).files, isEmpty);

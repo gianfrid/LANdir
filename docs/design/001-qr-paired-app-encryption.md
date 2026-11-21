@@ -29,7 +29,11 @@ citations: [docs/research/001-encryption-over-http-without-tls.md](../research/0
    enabled; with it disabled the host is keyless and plaintext like the
    CLI servers. Default ON. In encryption mode the plaintext endpoints
    (page, `files`, `ls`, `fl`, `upload`) answer 404: nothing is readable
-   or writable without the key.
+   or writable without the key. The token is deliberately NOT stacked on
+   top (disentangled, ADR 0003): encrypted hosts skip Secret mode
+   entirely — fixed root paths (`/s*`), no token generated — because the
+   token ships in the same QR as the key and adds no protection beyond
+   it. Secret URL mode therefore governs keyless hosts only.
 
 ## Architecture
 
@@ -131,5 +135,7 @@ host, delivered out-of-band via the QR; avoid "server key"); **Pairing**
 - The app binary becomes a trust root; the release APK signing story
   (currently debug-signed in CI) matters more once this ships.
 - DoS is always available to a LAN attacker; encryption never fixes it.
-- The 128-bit token remains visible in request paths; with sealed bodies a
-  passive observer learns traffic exists, AEAD rejects garbage replays.
+- With sealed (token-less) endpoints a passive observer learns that traffic
+  exists (paths, sizes, timing) but nothing about content; AEAD rejects
+  garbage replays. Keyless hosts keep the 128-bit token in request paths,
+  as before.

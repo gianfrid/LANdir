@@ -32,7 +32,7 @@ void main() {
     expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
   });
 
-  testWidgets('host tab shows start button and secret mode toggle',
+  testWidgets('host tab shows start button and encryption switch',
       (tester) async {
     usePhoneViewport(tester);
     await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
@@ -41,7 +41,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Start server'), findsOneWidget);
-    expect(find.text('Secret URL mode'), findsOneWidget);
+    expect(find.text('Secret URL mode'), findsNothing,
+        reason: 'with encryption on there is no token to toggle');
     // The Save directory picker appears with the default location when a
     // choice is possible (desktop host platform) or not at all otherwise.
     if (canChooseSaveDir) {
@@ -51,13 +52,9 @@ void main() {
     } else {
       expect(find.text('Save files to'), findsNothing);
     }
-    // The two mode switches: Secret URL mode and Encryption.
-    final secretSwitch =
-        tester.widget<Switch>(find.byKey(const ValueKey('secret_mode_switch')));
-    expect(secretSwitch.value, isTrue);
+    // The encryption switch is the only mode switch, on by default.
     final encryptionSwitch = tester.widget<Switch>(
         find.byKey(const ValueKey('encryption_mode_switch')));
-    // Encryption defaults on: it is the reason the app host exists.
     expect(encryptionSwitch.value, isTrue);
   });
 
@@ -68,6 +65,11 @@ void main() {
     await tester.tap(find.text('Host'));
     await tester.pump();
 
+    // Secret URL mode exists only when encryption is off.
+    await tester.tap(find.byKey(const ValueKey('encryption_mode_switch')));
+    await tester.pump();
+    expect(find.text('Secret URL mode'), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('secret_mode_switch')));
     await tester.pump();
 
@@ -77,7 +79,7 @@ void main() {
     // The encryption switch is untouched by a secret-mode toggle.
     final encryptionSwitch = tester.widget<Switch>(
         find.byKey(const ValueKey('encryption_mode_switch')));
-    expect(encryptionSwitch.value, isTrue);
+    expect(encryptionSwitch.value, isFalse);
   });
 
   testWidgets('the encryption switch toggles the mode', (tester) async {
@@ -92,12 +94,15 @@ void main() {
     var encryptionSwitch = tester.widget<Switch>(
         find.byKey(const ValueKey('encryption_mode_switch')));
     expect(encryptionSwitch.value, isFalse);
+    // Off: the Secret URL mode toggle reappears (keyless host, token path).
+    expect(find.text('Secret URL mode'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('encryption_mode_switch')));
     await tester.pump();
     encryptionSwitch = tester.widget<Switch>(
         find.byKey(const ValueKey('encryption_mode_switch')));
     expect(encryptionSwitch.value, isTrue);
+    expect(find.text('Secret URL mode'), findsNothing);
   });
 
   testWidgets('host port field defaults to 8000 and commits entered ports',

@@ -32,12 +32,19 @@ the mode is on:
 
 - **Mode ON** (default): the key is generated once, persisted in the
   app-support directory, and advertised in the QR (`#k=`); the server
-  serves ONLY the sealed endpoints — every plaintext route (page, `files`,
-  `ls`, `fl`, `upload`) answers 404, so files are neither readable nor
-  writable without the key.
-- **Mode OFF**: a keyless host — no `#k=` in the QR, sealed endpoints closed,
-  and the plaintext contract exactly as `landir.py`/Rust serve it (browsers
-  and CLI peers work like before).
+  serves ONLY the sealed endpoints at fixed root paths (`/supload`,
+  `/sfiles`, `/sls`, `/sfl`) — **no token is generated at all**, so the
+  host key is the only access control. Every plaintext route (page,
+  `files`, `ls`, `fl`, `upload`) answers 404, so files are neither
+  readable nor writable without the key. The token/Secret-mode layer is
+  deliberately not stacked on top: it always ships in the same QR as the
+  key, so it adds no protection against the actual leak channel, and the
+  key is strictly stronger.
+- **Mode OFF**: a keyless host — no `#k=` in the QR, sealed endpoints
+  closed, and the plaintext contract exactly as `landir.py`/Rust serve
+  it, with Secret URL mode controlling the token path as on CLI hosts
+  (the Secret URL mode toggle is hidden in the UI while encryption is
+  on, since there is no token to toggle).
 
 `landir.py` and the Rust server are unchanged in both modes: no crypto,
 plaintext endpoints, QRs without `#k=`. App clients talking to a CLI host

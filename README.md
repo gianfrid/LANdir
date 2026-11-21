@@ -152,14 +152,16 @@ from `landir.py` via `scripts/export_golden.py`.
 
 **App = secure path; browser = documented plaintext.** The app host has an
 **encryption mode** (default on, toggleable in the host view). With it on, the
-QR carries a long-term X25519 host key (`#k=`), only the app can connect, and
-files are not readable — or writable — without the key: every plaintext route
-answers 404 (see
+QR carries a long-term X25519 host key (`#k=`) and nothing else gates access —
+no request token, no Secret URL mode: only the app can connect, and files are
+not readable — or writable — without the key (every plaintext route answers
+404; see
 [docs/design/001-qr-paired-app-encryption.md](docs/design/001-qr-paired-app-encryption.md)
 and [ADR 0003](docs/adr/0003-sealed-app-endpoints.md)). Turn the mode off and
-the host serves the same plaintext HTTP contract as the CLI servers — anyone
-with the URL, browsers included, can connect. CLI hosts (`landir.py`, Rust) have
-no key and always serve that plaintext contract.
+the host becomes a keyless plaintext server like the CLI implementations —
+anyone with the URL, browsers included, can connect, and Secret URL mode
+controls the token path again. CLI hosts (`landir.py`, Rust) have no key and
+always serve that plaintext contract.
 
 ```bash
 cd app
