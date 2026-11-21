@@ -1,4 +1,4 @@
-// Client view: list of saved Landir servers, QR scan to add, and entry
+// Client view: list of saved LANdir servers, QR scan to add, and entry
 // to the file browser for the selected server.
 
 import 'package:flutter/material.dart';
@@ -40,7 +40,7 @@ class _ClientViewState extends ConsumerState<ClientView> {
       ref.read(clientControllerProvider.notifier).acknowledgeRemovedServer();
     });
 
-    // Warn before adding a server whose address is not on the LAN: Landir
+    // Warn before adding a server whose address is not on the LAN: LANdir
     // is LAN-only, so a public address usually means a mistyped or
     // malicious QR code. Uploads would send file bytes to that host.
     ref.listen(clientControllerProvider, (prev, next) {

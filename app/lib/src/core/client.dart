@@ -1,4 +1,4 @@
-// HTTP client for talking to a Landir server (desktop Python/Rust or
+// HTTP client for talking to a LANdir server (desktop Python/Rust or
 // another phone's host role). Pure Dart — no Flutter imports.
 
 import 'dart:convert';
@@ -31,7 +31,7 @@ class RemoteFile {
 }
 
 /// A directory listing answered 404: the base URL (host:port + token path)
-/// no longer maps to a Landir server. Callers treat this as "server is gone".
+/// no longer maps to a LANdir server. Callers treat this as "server is gone".
 ///
 /// Only listing requests raise this. A 404 on a download just means the file
 /// is missing and stays a plain [HttpException].
@@ -41,8 +41,8 @@ class ServerGoneException extends HttpException {
   ServerGoneException(this.url) : super('server gone (404): $url');
 }
 
-/// A Landir server the client can talk to.
-class LandirClient {
+/// A LANdir server the client can talk to.
+class LANdirClient {
   final String baseUrl; // e.g. http://192.168.1.5:8000/abc123/
 
   /// The pinned host key (design 001, M3/M4). When set, every request goes
@@ -53,7 +53,7 @@ class LandirClient {
 
   final HttpClient _http = HttpClient();
 
-  LandirClient(this.baseUrl, {this.hostKey}) {
+  LANdirClient(this.baseUrl, {this.hostKey}) {
     // Normalize: ensure trailing slash
     if (!baseUrl.endsWith('/')) {
       throw ArgumentError('baseUrl must end with /');

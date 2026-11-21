@@ -12,7 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   late String tmpDir;
-  late LandirServer server;
+  late LANdirServer server;
   late int port;
   late ProviderContainer container;
 
@@ -23,7 +23,7 @@ void main() {
     File('$tmpDir/reports/q3.txt').writeAsStringSync('q3');
     File('$tmpDir/reports/2025/q4.txt').writeAsStringSync('q4');
     File('$tmpDir/top.txt').writeAsStringSync('top');
-    server = LandirServer(
+    server = LANdirServer(
       ServerConfig(port: 0, uploadDir: tmpDir, insecure: true),
       DirectoryFileSink(tmpDir),
     );

@@ -25,7 +25,7 @@ void main() {
 
   testWidgets('app opens on the client tab', (tester) async {
     usePhoneViewport(tester);
-    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
 
     // Client is the default tab: its empty state is visible without tapping.
     expect(find.textContaining('No servers yet'), findsOneWidget);
@@ -35,7 +35,7 @@ void main() {
   testWidgets('host tab shows start button and secret mode toggle',
       (tester) async {
     usePhoneViewport(tester);
-    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
 
     await tester.tap(find.text('Host'));
     await tester.pump();
@@ -59,7 +59,7 @@ void main() {
 
   testWidgets('toggling the switch flips insecure mode', (tester) async {
     usePhoneViewport(tester);
-    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
 
     await tester.tap(find.text('Host'));
     await tester.pump();
@@ -77,7 +77,7 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
-        container: container, child: const LandirApp()));
+        container: container, child: const LANdirApp()));
 
     await tester.tap(find.text('Host'));
     await tester.pump();
@@ -96,7 +96,7 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
-        container: container, child: const LandirApp()));
+        container: container, child: const LANdirApp()));
 
     await tester.tap(find.text('Host'));
     await tester.pump();
@@ -126,7 +126,7 @@ void main() {
   testWidgets('desktop: empty downloads frame auto-hides, toggle pins it',
       (tester) async {
     useDesktopViewport(tester);
-    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
     await tester.pumpAndSettle();
 
     // No bottom navigation on desktop, and an empty downloads list means
@@ -154,7 +154,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'landir_local_downloads': '[{"name":"cat.png","timestamp":1731950000000}]',
     });
-    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
     await tester.pumpAndSettle();
 
     expect(find.text('Downloads'), findsOneWidget);

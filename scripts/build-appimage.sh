@@ -27,7 +27,7 @@ cp app/assets/icon.png "$APPDIR/landir.png"
 cat > "$APPDIR/landir.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
-Name=Landir
+Name=LANdir
 Exec=landir_app
 Icon=landir
 Categories=Network;

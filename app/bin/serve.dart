@@ -1,4 +1,4 @@
-// Minimal runner: starts the Landir core server on a port and prints the URL.
+// Minimal runner: starts the LANdir core server on a port and prints the URL.
 // Used for live cross-checks against the Python reference probes.
 
 import 'dart:io';
@@ -17,7 +17,7 @@ Future<void> main(List<String> args) async {
     insecure: insecure,
     secretToken: token,
   );
-  final server = LandirServer(config, DirectoryFileSink(dir));
+  final server = LANdirServer(config, DirectoryFileSink(dir));
   await server.start();
   print('PORT=${server.boundPort}');
   print('READY');

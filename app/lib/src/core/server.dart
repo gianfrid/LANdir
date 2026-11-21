@@ -1,4 +1,4 @@
-// HTTP server for the Landir core, ported from landir.py's Handler.
+// HTTP server for the LANdir core, ported from landir.py's Handler.
 // Uses dart:io HttpServer directly — no middleware — so the request
 // handling stays byte-comparable with the Python reference.
 
@@ -13,7 +13,7 @@ import 'multipart.dart';
 import 'page.dart';
 import 'security.dart';
 
-/// Configuration for a Landir server instance.
+/// Configuration for a LANdir server instance.
 class ServerConfig {
   /// A valid requested port: 0-65535, where 0 delegates the choice to the
   /// host (it picks a random free dynamic-range port). One rule, shared by
@@ -41,8 +41,8 @@ class ServerConfig {
   String get listPrefix => '${pagePath}ls/';
 }
 
-/// A running Landir server instance.
-class LandirServer {
+/// A running LANdir server instance.
+class LANdirServer {
   final ServerConfig config;
   final FileSink sink;
 
@@ -53,7 +53,7 @@ class LandirServer {
 
   HttpServer? _httpServer;
 
-  LandirServer(this.config, this.sink, {this.hostKey});
+  LANdirServer(this.config, this.sink, {this.hostKey});
 
   String get pagePath => config.pagePath;
 

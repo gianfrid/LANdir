@@ -8,7 +8,7 @@ citations: [docs/research/001-encryption-over-http-without-tls.md](../research/0
 
 ## Scope decisions already made (session 2026-11-18)
 
-1. **The QR code is the key-exchange channel.** Landir's QR is a genuine
+1. **The QR code is the key-exchange channel.** LANdir's QR is a genuine
    out-of-band channel (the host's own screen); it will carry the host's
    long-term public key, giving day-one authenticated key exchange with no
    TOFU window — the CurveCP/WireGuard shape, where an active MITM degrades
@@ -96,7 +96,7 @@ M2 Sealed endpoints in the Dart core (upload, download, listing) with
 M3 Client pining: scan parses #k=, SavedServer.hostKey, registry
    versioning; never-seal-fallback state machine. Tests: pin round-trip,
    keyless-host badge state, rescan-changed-key blocking.
-M4 Sealed transport in LandirClient (pure Dart): upload/download/listing
+M4 Sealed transport in LANdirClient (pure Dart): upload/download/listing
    envelopes; integration test app-client ↔ Dart-host over loopback.
 M5 UX: badge, rescan warning, pairing copy. Widget tests.
 M6 Docs: ADR 0003 (parity exception), GLOSSARY terms, README security

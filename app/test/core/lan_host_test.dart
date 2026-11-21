@@ -1,5 +1,5 @@
 // Tests for isLanHost: the classifier gating the non-LAN server warning.
-// Landir is LAN-only; anything not clearly local must classify as false so
+// LANdir is LAN-only; anything not clearly local must classify as false so
 // the client warns before sending file bytes to it.
 
 import 'package:flutter_test/flutter_test.dart';

@@ -32,11 +32,11 @@ void main() {
           ),
         ),
       );
-  runApp(const ProviderScope(child: LandirApp()));
+  runApp(const ProviderScope(child: LANdirApp()));
 }
 
-class LandirApp extends StatelessWidget {
-  const LandirApp({super.key});
+class LANdirApp extends StatelessWidget {
+  const LANdirApp({super.key});
 
   @override
   Widget build(BuildContext context) {

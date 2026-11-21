@@ -1,4 +1,4 @@
-// Host view: the main screen of the Landir app in host role.
+// Host view: the main screen of the LANdir app in host role.
 // Shows the QR code, URL, and start/stop controls.
 
 import 'dart:io';

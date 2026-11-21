@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Landir - a simple LAN file upload server.
+"""LANdir - a simple LAN file upload server.
 
 Usage:
     python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure]

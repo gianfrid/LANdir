@@ -1,7 +1,7 @@
 // Share-sheet intake model. Pure Dart — no Flutter imports.
 
 /// An item received through the platform share sheet, normalized for
-/// upload to a Landir server. Either [filePath] or [text] is set.
+/// upload to a LANdir server. Either [filePath] or [text] is set.
 class IncomingShare {
   /// Suggested upload filename.
   final String filename;

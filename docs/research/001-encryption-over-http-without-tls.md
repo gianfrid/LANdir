@@ -2,7 +2,7 @@
 
 Research question: how can data sent over plain HTTP be encrypted
 (application-layer, no TLS) while remaining resistant to man-in-the-middle
-(MITM) attacks — in general, and for Landir specifically (stock-browser LAN
+(MITM) attacks — in general, and for LANdir specifically (stock-browser LAN
 file sharing where the host displays a QR code of a tokenized capability URL).
 
 Status: research only; no code change is proposed here.
@@ -14,7 +14,7 @@ problem. An unauthenticated key exchange is transparently MITM-able, and
 every serious scheme reduces to one of three authentication sources:
 a pre-shared secret, a third-party-certified key (what TLS does), or
 out-of-band verification / trust-on-first-use (RFC 4251 §4.1 [5]; Noise
-§14 [7]). Landir is unusually well positioned for the third source: it already
+§14 [7]). LANdir is unusually well positioned for the third source: it already
 owns a genuine out-of-band channel — the QR code — but that channel currently
 carries only a bearer capability token, which authenticates nothing about the
 connection and is itself readable off the wire by anyone who can observe the
@@ -27,7 +27,7 @@ fragment key) authenticates first-load JS over plain HTTP — the SRI spec says
 so itself (§5.1) [21]. Worse: `crypto.subtle` is `[SecureContext]`-gated
 (WebCrypto IDL [19]) and a plain `http://` origin on a LAN IP is *not* a
 secure context (Secure Contexts §3.1 [20]), so stock Chrome/Firefox expose no
-WebCrypto at all on Landir's page as it runs today.
+WebCrypto at all on LANdir's page as it runs today.
 
 Recommendation (option d, hybrid): real end-to-end sealing inside the Flutter
 app — which ships its own crypto code in the binary and thus sidesteps the
@@ -100,7 +100,7 @@ Costs: (1) the secret's entropy is the attacker's per-run online guess budget
 (no offline dictionary is possible against SPAKE2 — that is the whole point);
 (2) with a symmetric PAKE the server stores a password equivalent — harmless
 when the "password" is a random per-run key rather than a human one, which is
-exactly the wormhole/Landir shape, making OPAQUE's augmentation unnecessary
+exactly the wormhole/LANdir shape, making OPAQUE's augmentation unnecessary
 here; (3) PAKE only authenticates — a well-engineered AEAD record layer on
 top is still required, and bespoke constructions invite the rollback and
 negotiation bugs Noise §14 warns about [7].
@@ -146,7 +146,7 @@ negotiation bugs Noise §14 warns about [7].
 *What this buys / what this costs.* Key continuity plus out-of-band
 comparison gives strong practical MITM resistance with zero infrastructure,
 backed by decades of SSH usage. The costs: a first-use window (TOFU) or a
-human comparison step (Signal), and — decisive for Landir — **the integrity
+human comparison step (Signal), and — decisive for LANdir — **the integrity
 of the comparison channel becomes the security perimeter**. If the fingerprint
 is displayed to users by the very path it is supposed to verify, the scheme is
 circular; if it arrives via a genuinely separate channel (in-person scan,
@@ -178,7 +178,7 @@ host's own screen), it has a root of trust on day one without any TOFU window.
 authentication from nothing, using the humans' side channel instead of PKI.
 An attacker with only a network position cannot mount an offline dictionary
 attack (one online guess per attempt — hence 16 bits is tolerable there);
-an attacker who *hears the code* wins outright. For Landir the analogous
+an attacker who *hears the code* wins outright. For LANdir the analogous
 observation is favorable: nobody has to type the code, so a QR-embedded
 secret can carry 128+ bits, and the QR's delivery (the host device's own
 screen) is much harder to intercept en masse than a spoken code.
@@ -199,7 +199,7 @@ claim argued from the specs read, not a sentence in any one spec.)
 
 *What this buys / what this costs.* One well-audited TLS stack doing both
 auth and confidentiality — but only for configurable clients. Inapplicable
-to Landir's browser clients; unnecessary for the app.
+to LANdir's browser clients; unnecessary for the app.
 
 ## 6. The browser-side reality (the hardest constraint)
 
@@ -216,7 +216,7 @@ which the use of Transport Layer Security may mitigate" (§6.2), and users
 should know that applications using these APIs "will have full access to all
 messages exchanged, regardless of the cryptography employed" (§6.3) [18].
 
-Concretely for Landir, in increasing severity:
+Concretely for LANdir, in increasing severity:
 
 1. **WebCrypto availability.** `SubtleCrypto` is annotated `[SecureContext]`
    in the spec IDL — `[Exposed=(Window,Worker)] interface Crypto {
@@ -226,7 +226,7 @@ Concretely for Landir, in increasing severity:
    `localhost`, and `file:`; everything else — including `http://` origins on
    LAN IPs — is not trustworthy (Secure Contexts §3.1) [20]. **So on
    `http://192.168.x.y:8000/...`, conforming browsers expose no
-   `crypto.subtle` at all.** Any browser-side sealing for Landir must embed
+   `crypto.subtle` at all.** Any browser-side sealing for LANdir must embed
    pure-JS crypto in the static page (mechanically possible with a compact
    X25519+secretbox implementation; it will not be constant-time hardware).
    Safari's behavior on insecure origins was not verified.
@@ -258,7 +258,7 @@ Concretely for Landir, in increasing severity:
    is no way, within the current web platform, to authenticate first-load JS
    over plain HTTP.** The nearest escape is SQRL, which simply refuses
    page-delivered JS: authentication runs in a native app or pre-trusted
-   browser extension (grc.com SQRL document set) [24] — which for Landir is
+   browser extension (grc.com SQRL document set) [24] — which for LANdir is
    an argument for the Flutter app, not for the browser page.
 
 *What this buys / what this costs.* WebCrypto or pure-JS crypto can encrypt
@@ -267,9 +267,9 @@ cannot defeat an active first-use MITM, because the trust channel would have
 to be delivered by the untrusted channel. This is a theorem-shaped limitation,
 not an implementation gap.
 
-## 7. Landir-specific assessment
+## 7. LANdir-specific assessment
 
-### Where Landir stands today
+### Where LANdir stands today
 
 The browser session is fully cleartext: file names, bytes, and the 128-bit
 token itself (it rides in the URL path of every request) are visible to
@@ -278,7 +278,7 @@ parties with *no* view of the traffic or the QR — a real property, since
 other LAN devices cannot guess the URL — but it is neither confidentiality
 nor authentication: a passive observer of a single request learns the token.
 The QR code, however, is a genuine out-of-band channel operated by the host
-device's own screen — the strongest asset Landir has. Note the QR terminal
+device's own screen — the strongest asset LANdir has. Note the QR terminal
 rendering (and container `--url` remapping) becomes security-relevant the
 moment it carries key material.
 
@@ -293,7 +293,7 @@ moment it carries key material.
 | Downgrade ("pretend scheme absent") | browser: page JS decides (attacker-controlled); app: unaffected by definition | app: Noise §14 rollback caution — negotiate inside the transcript, not as a preamble [7] | — no coexisting modes to confuse | app must not trust any "plain mode" signal from the network |
 | Key management | per-run random PSK; race: both from QR | host keypair persisted; ephemeral client keys; HKDF → per-file AEAD | host keypair in app storage; Signal-style rescan [13] | host keypair + QR distribution |
 | SPEC interactions (static HTML, no reflection) | PAGE grows a JS PAKE; handshake values stay in POST JSON, page unchanged | PAGE grows JS ECDH; page unchanged otherwise | core stays pure-Dart; golden vectors extend cleanly | as (b); PAGE grows |
-| Leftover risk | browser first-use MITM stays; PAKE adds complexity where QR already carries full entropy | browser first-use MITM stays; fragment in browser history/clipboard (accepted by Firefox Send [23]) | browser users get nothing; landir's browser-usability promise weakened; distribution trust = app signing (currently debug-signed APK per README) | (b)+(c) residuals, no new ones |
+| Leftover risk | browser first-use MITM stays; PAKE adds complexity where QR already carries full entropy | browser first-use MITM stays; fragment in browser history/clipboard (accepted by Firefox Send [23]) | browser users get nothing; LANdir's browser-usability promise weakened; distribution trust = app signing (currently debug-signed APK per README) | (b)+(c) residuals, no new ones |
 | Verdict | dominated by (b): same browser weakness, more protocol, QR entropy spent on a PAKE where a straight pubkey does the job | best single mechanism | strongest security; abandons the core "plain browser works" promise for sensitive content | **recommended** |
 
 Concrete recommendation, option (d):
@@ -316,7 +316,7 @@ Concrete recommendation, option (d):
 4. **Browser client** (optional, honestly labeled): pure-JS X25519+AEAD
    (no WebCrypto dependency — §6.1) in the static PAGE, reading the pubkey
    from the fragment and sealing upload/download bodies. This defeats the
-   passive LAN observer — Landir's dominant realistic adversary — and
+   passive LAN observer — LANdir's dominant realistic adversary — and
    nothing else. The page should say exactly that.
 5. **State**: keep the token per-run (it is a capability, not an identity).
    If TOFU pinning is added in the app, pin to (host, port, pubkey), never to

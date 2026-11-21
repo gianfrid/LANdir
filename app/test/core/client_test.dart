@@ -1,4 +1,4 @@
-// Tests for the M3 client core: LandirClient against a live LandirServer
+// Tests for the M3 client core: LANdirClient against a live LANdirServer
 // (which is behavior-identical to the Python reference).
 
 import 'dart:convert';
@@ -14,7 +14,7 @@ import 'package:test/test.dart';
 
 void main() {
   late String tmpDir;
-  late LandirServer server;
+  late LANdirServer server;
   late int port;
 
   setUp(() async {
@@ -24,7 +24,7 @@ void main() {
       uploadDir: tmpDir,
       insecure: true,
     );
-    server = LandirServer(config, DirectoryFileSink(tmpDir));
+    server = LANdirServer(config, DirectoryFileSink(tmpDir));
     await server.start();
     port = server.boundPort;
   });
@@ -35,14 +35,14 @@ void main() {
   });
 
   test('listFiles returns empty list on fresh server', () async {
-    final client = LandirClient('http://127.0.0.1:$port/');
+    final client = LANdirClient('http://127.0.0.1:$port/');
     final files = await client.listFiles();
     expect(files, isEmpty);
     client.close();
   });
 
   test('uploadFile then listFiles then downloadFile round-trip', () async {
-    final client = LandirClient('http://127.0.0.1:$port/');
+    final client = LANdirClient('http://127.0.0.1:$port/');
     final content = Uint8List.fromList(utf8.encode('hello from client'));
 
     final ok = await client.uploadFile('greeting.txt', content);
@@ -59,7 +59,7 @@ void main() {
   });
 
   test('uploadFile with binary content preserves bytes exactly', () async {
-    final client = LandirClient('http://127.0.0.1:$port/');
+    final client = LANdirClient('http://127.0.0.1:$port/');
     // Include CRLF, null bytes, and high bytes to stress the multipart framing
     final content = Uint8List.fromList([
       0x00, 0x0d, 0x0a, 0xff, 0xfe, 0x0d, 0x0a, 0x0d, 0x0a, 0x80, 0x7f, 0x41,
@@ -86,7 +86,7 @@ void main() {
   });
 
   test('downloadFile on nonexistent file throws', () async {
-    final client = LandirClient('http://127.0.0.1:$port/');
+    final client = LANdirClient('http://127.0.0.1:$port/');
     // Await each assertion: the fire-and-forget form raced with close()
     // and asserted on an aborted connection, not the actual 404.
     await expectLater(
@@ -100,7 +100,7 @@ void main() {
     // Secret-mode server: any path under the wrong token is a 404, which is
     // what a client sees when the server restarted with a new token.
     final secretDir = Directory.systemTemp.createTempSync('landir_secret_');
-    final secret = LandirServer(
+    final secret = LANdirServer(
       ServerConfig(
         port: 0,
         uploadDir: secretDir.path,
@@ -114,7 +114,7 @@ void main() {
       secretDir.deleteSync(recursive: true);
     });
 
-    final stale = LandirClient('http://127.0.0.1:${secret.boundPort}/oldtoken/');
+    final stale = LANdirClient('http://127.0.0.1:${secret.boundPort}/oldtoken/');
     await expectLater(
         stale.listDir(''), throwsA(isA<ServerGoneException>()));
     stale.close();
@@ -125,7 +125,7 @@ void main() {
     // A stale upload endpoint also 404s, but uploads report failure via
     // their bool return; they must never raise ServerGoneException.
     final secretDir = Directory.systemTemp.createTempSync('landir_secret_');
-    final secret = LandirServer(
+    final secret = LANdirServer(
       ServerConfig(
         port: 0,
         uploadDir: secretDir.path,
@@ -139,7 +139,7 @@ void main() {
       secretDir.deleteSync(recursive: true);
     });
 
-    final stale = LandirClient('http://127.0.0.1:${secret.boundPort}/oldtoken/');
+    final stale = LANdirClient('http://127.0.0.1:${secret.boundPort}/oldtoken/');
     final ok = await stale.uploadFile('x.txt', Uint8List.fromList([1]));
     expect(ok, isFalse);
     stale.close();
@@ -148,7 +148,7 @@ void main() {
   test('a 404 on download is a plain HttpException, not server-gone', () async {
     // A missing file is a 404 too, but it must not be mistaken for a dead
     // server: only listing requests raise ServerGoneException.
-    final client = LandirClient('http://127.0.0.1:$port/');
+    final client = LANdirClient('http://127.0.0.1:$port/');
     await expectLater(
       () => client.downloadFile('missing.txt'),
       throwsA(isA<HttpException>()),
@@ -166,7 +166,7 @@ void main() {
     subDir.createSync();
     File('${subDir.path}/q3.txt').writeAsStringSync('quarterly');
 
-    final client = LandirClient('http://127.0.0.1:$port/');
+    final client = LANdirClient('http://127.0.0.1:$port/');
 
     // Root listing shows the directory
     final root = await client.listDir('');
@@ -210,7 +210,7 @@ void main() {
       return String.fromCharCodes(chunks.expand((c) => c).toList());
     });
 
-    final client = LandirClient('http://127.0.0.1:$port/');
+    final client = LANdirClient('http://127.0.0.1:$port/');
     final ok = await client.uploadFile('hdr.txt', Uint8List.fromList(utf8.encode('x')));
     expect(ok, isTrue);
     client.close();
@@ -232,11 +232,11 @@ void main() {
       insecure: false,
       secretToken: 'abc123',
     );
-    final server2 = LandirServer(config, DirectoryFileSink(tmpDir2));
+    final server2 = LANdirServer(config, DirectoryFileSink(tmpDir2));
     await server2.start();
     final port2 = server2.boundPort;
 
-    final client = LandirClient('http://127.0.0.1:$port2/abc123/');
+    final client = LANdirClient('http://127.0.0.1:$port2/abc123/');
     final ok = await client.uploadFile('secret.txt',
         Uint8List.fromList(utf8.encode('secret data')));
     expect(ok, isTrue);

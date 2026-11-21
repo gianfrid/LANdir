@@ -1,4 +1,4 @@
-// M4 tests: sealed transport in LandirClient against a real Dart host over
+// M4 tests: sealed transport in LANdirClient against a real Dart host over
 // loopback (docs/design/001). The pinned-key client must seal every request
 // and refuse unauthenticated responses — never a plaintext fallback.
 
@@ -15,16 +15,16 @@ import 'package:test/test.dart';
 void main() {
   late String tmpDir;
   late HostKey hostKey;
-  late LandirServer server;
+  late LANdirServer server;
   late String baseUrl;
-  late LandirClient client;
+  late LANdirClient client;
 
   setUpAll(() async {
     tmpDir = Directory.systemTemp.createTempSync('landir_sealed_client_').path;
     final keyDir = Directory.systemTemp.createTempSync('landir_sealed_ckey_');
     addTearDown(() => keyDir.deleteSync(recursive: true));
     hostKey = await HostKeyStore(keyDir.path).loadOrCreate();
-    server = LandirServer(
+    server = LANdirServer(
       ServerConfig(
           port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'tok'),
       DirectoryFileSink(tmpDir),
@@ -41,7 +41,7 @@ void main() {
   });
 
   setUp(() {
-    client = LandirClient(baseUrl, hostKey: hostKey.publicKey);
+    client = LANdirClient(baseUrl, hostKey: hostKey.publicKey);
   });
 
   tearDown(() {
@@ -73,7 +73,7 @@ void main() {
     final wrongDir = Directory.systemTemp.createTempSync('landir_wrong_');
     addTearDown(() => wrongDir.deleteSync(recursive: true));
     final wrongHost = await HostKeyStore(wrongDir.path).loadOrCreate();
-    final evil = LandirClient(baseUrl, hostKey: wrongHost.publicKey);
+    final evil = LANdirClient(baseUrl, hostKey: wrongHost.publicKey);
     addTearDown(() => evil.close());
     // The server cannot authenticate the envelope's response to us: the
     // response either 400s or fails to open — both surface as exceptions.
@@ -82,14 +82,14 @@ void main() {
 
   test('keyless client against keyless host still works (plaintext mode)',
       () async {
-    final plain = LandirServer(
+    final plain = LANdirServer(
       ServerConfig(
           port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'plain'),
       DirectoryFileSink(tmpDir),
     );
     await plain.start();
     addTearDown(() => plain.stop());
-    final c = LandirClient('http://127.0.0.1:${plain.boundPort}/plain/');
+    final c = LANdirClient('http://127.0.0.1:${plain.boundPort}/plain/');
     addTearDown(() => c.close());
     final ok = await c.uploadFile('plain.txt', Uint8List.fromList(utf8.encode('p')));
     expect(ok, isTrue);

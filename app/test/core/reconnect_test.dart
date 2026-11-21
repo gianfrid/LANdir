@@ -13,12 +13,12 @@ import 'package:test/test.dart';
 
 void main() {
   late String tmpDir;
-  late LandirServer server;
+  late LANdirServer server;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     tmpDir = Directory.systemTemp.createTempSync('landir_reconnect_').path;
-    server = LandirServer(
+    server = LANdirServer(
       ServerConfig(port: 0, uploadDir: tmpDir, insecure: true),
       DirectoryFileSink(tmpDir),
     );

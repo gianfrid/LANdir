@@ -45,7 +45,7 @@ class _SetBackedSink implements FileSink {
 }
 
 void main() {
-  late LandirServer server;
+  late LANdirServer server;
   late HttpClient client;
   late int port;
 
@@ -66,7 +66,7 @@ void main() {
         uploadDir: tmpDir,
         insecure: true,
       );
-      server = LandirServer(config, DirectoryFileSink(tmpDir));
+      server = LANdirServer(config, DirectoryFileSink(tmpDir));
       await server.start();
       port = server.boundPort;
       client = HttpClient();
@@ -184,7 +184,7 @@ void main() {
       final emptyDir = Directory.systemTemp.createTempSync('landir_empty_').path;
       final storeDir = Directory.systemTemp.createTempSync('landir_store_').path;
       final forcingSink = _SetBackedSink(DirectoryFileSink(storeDir));
-      final srv = LandirServer(
+      final srv = LANdirServer(
         ServerConfig(port: 0, uploadDir: emptyDir, insecure: true),
         forcingSink,
       );
@@ -296,7 +296,7 @@ void main() {
     test('upload size cap returns 413 when exceeded', () async {
       // Start a capped server on a new port
       final cappedDir = Directory.systemTemp.createTempSync('landir_cap_').path;
-      final capped = LandirServer(
+      final capped = LANdirServer(
         ServerConfig(
           port: 0,
           uploadDir: cappedDir,
@@ -329,7 +329,7 @@ void main() {
         insecure: false,
         secretToken: 'testtoken123',
       );
-      server = LandirServer(config, DirectoryFileSink(tmpDir));
+      server = LANdirServer(config, DirectoryFileSink(tmpDir));
       await server.start();
       port = server.boundPort;
       client = HttpClient();
@@ -409,7 +409,7 @@ void main() {
       final (blocker, taken) = await occupyAPort();
       addTearDown(() => blocker.close(force: true));
 
-      final srv = LandirServer(
+      final srv = LANdirServer(
         ServerConfig(port: taken, uploadDir: tmpDir, insecure: true),
         DirectoryFileSink(tmpDir),
       );
@@ -430,7 +430,7 @@ void main() {
     });
 
     test('port 0 draws a free port from the dynamic range', () async {
-      final srv = LandirServer(
+      final srv = LANdirServer(
         ServerConfig(port: 0, uploadDir: tmpDir, insecure: true),
         DirectoryFileSink(tmpDir),
       );

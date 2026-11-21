@@ -1,6 +1,6 @@
-# Landir
+# LANdir
 
-Landir turns any device into a shared network directory. One device hosts a
+LANdir turns any device into a shared network directory. One device hosts a
 small HTTP server; every other device on the same network can then drop files
 onto it — from a plain web browser, no app install required — and download
 them again. Files land in a local directory (on phones, in the native Files
@@ -11,7 +11,7 @@ app).
 ## Scope
 
 **Goal:** a universal shared directory for the local network. Any device that
-can run a Landir host becomes a drop point; any device with a web browser can
+can run a LANdir host becomes a drop point; any device with a web browser can
 use it.
 
 - **Client requirement is minimal: a web browser.** Uploading and downloading
@@ -33,7 +33,7 @@ use it.
 
 - `landir.py` — single-file, zero-dependency Python application (server, HTML page, upload handling, QR code encoder/renderer). Reference implementation; must run on a bare python3.
 - `src/` + `Cargo.toml` — Rust implementation (axum/tokio). Same CLI and endpoints; distributed as a container image, so crates are fine here.
-- `app/` — Flutter app (Android, iOS, Linux desktop). Hosts the drop server on the phone and acts as a client to any Landir server. Pure-Dart core in `app/lib/src/core/` is tested against golden vectors from `landir.py`. See [ARCHITECTURE.md](ARCHITECTURE.md) and [ADR 0001](docs/adr/0001-flutter-multiplatform.md).
+- `app/` — Flutter app (Android, iOS, Linux desktop). Hosts the drop server on the phone and acts as a client to any LANdir server. Pure-Dart core in `app/lib/src/core/` is tested against golden vectors from `landir.py`. See [ARCHITECTURE.md](ARCHITECTURE.md) and [ADR 0001](docs/adr/0001-flutter-multiplatform.md).
 - `tests/test_landir.py` — stdlib-unittest suite for the Python version (no dependencies).
 - `uploads/` — default upload target, created on start. Runtime data, do not commit.
 
@@ -115,7 +115,7 @@ scanning the QR get a TLS handshake error (the server cannot answer it).
 For example, with Caddy fronting the container:
 
 ```bash
-# Caddyfile: terminates TLS for clients, proxies plain HTTP to Landir
+# Caddyfile: terminates TLS for clients, proxies plain HTTP to LANdir
 #   landir.example.com {
 #       reverse_proxy localhost:18080
 #   }
@@ -124,7 +124,7 @@ podman run --rm -d -p 18080:8000 -v ./uploads:/app/uploads \
 ```
 
 The QR then advertises `https://landir.example.com/<token>/`; clients reach
-Landir through the proxy's TLS. Note the proxy can also see all traffic —
+LANdir through the proxy's TLS. Note the proxy can also see all traffic —
 only front it with software you trust on a network you trust.
 
 > `--url` exists only in the Rust implementation (the one the container

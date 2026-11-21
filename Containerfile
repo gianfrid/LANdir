@@ -1,4 +1,4 @@
-# Containerfile for Landir (default: the Rust implementation, distroless static image).
+# Containerfile for LANdir (default: the Rust implementation, distroless static image).
 # Multi-stage build: pinned rust:1.88-alpine compiles a fully static musl binary;
 # Compatible with both podman and docker (docker build -f Containerfile .)
 #

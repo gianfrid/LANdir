@@ -170,7 +170,7 @@ void main() {
 
   test('pinned client lists a sealed host over loopback', () async {
     File('$tmpDir/secret.txt').writeAsStringSync('s3cret');
-    final server = LandirServer(
+    final server = LANdirServer(
       ServerConfig(
           port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'tok'),
       DirectoryFileSink(tmpDir),
@@ -188,7 +188,7 @@ void main() {
 
   test('pinned client against a host with a different key fails (no fallback)',
       () async {
-    final server = LandirServer(
+    final server = LANdirServer(
       ServerConfig(
           port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'tok'),
       DirectoryFileSink(tmpDir),

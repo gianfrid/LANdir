@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file contains project-specific instructions and guidelines for coding agents working on the Landir project.
+This file contains project-specific instructions and guidelines for coding agents working on the LANdir project.
 
 ## Documentation Structure
 

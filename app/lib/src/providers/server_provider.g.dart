@@ -47,15 +47,15 @@ final class FileSinkProvider
 
 String _$fileSinkHash() => r'5c890b9f46d17ef8a69bd33de516752d74fa9b41';
 
-/// The running LandirServer instance (kept alive while running).
+/// The running LANdirServer instance (kept alive while running).
 
 @ProviderFor(ServerController)
 final serverControllerProvider = ServerControllerProvider._();
 
-/// The running LandirServer instance (kept alive while running).
+/// The running LANdirServer instance (kept alive while running).
 final class ServerControllerProvider
     extends $NotifierProvider<ServerController, ServerState> {
-  /// The running LandirServer instance (kept alive while running).
+  /// The running LANdirServer instance (kept alive while running).
   ServerControllerProvider._()
     : super(
         from: null,
@@ -83,9 +83,9 @@ final class ServerControllerProvider
   }
 }
 
-String _$serverControllerHash() => r'f6eeea08bc60d79ee9c2561a6bd915f291ba0b06';
+String _$serverControllerHash() => r'4658a5285306da5033936f3bc16227f316a63df8';
 
-/// The running LandirServer instance (kept alive while running).
+/// The running LANdirServer instance (kept alive while running).
 
 abstract class _$ServerController extends $Notifier<ServerState> {
   ServerState build();

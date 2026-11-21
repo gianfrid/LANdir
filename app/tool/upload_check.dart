@@ -1,5 +1,5 @@
-// One-shot: upload a file to a Landir server at the given base URL using
-// LandirClient, then list and download to prove the round trip.
+// One-shot: upload a file to a LANdir server at the given base URL using
+// LANdirClient, then list and download to prove the round trip.
 // Usage: dart run tool/upload_check.dart <baseUrl>
 import 'dart:convert';
 import 'dart:io';
@@ -8,7 +8,7 @@ import 'package:landir_app/src/core/client.dart';
 
 Future<void> main(List<String> args) async {
   final baseUrl = args[0];
-  final client = LandirClient(baseUrl);
+  final client = LANdirClient(baseUrl);
   final content = utf8.encode('uploaded from dart client at ${DateTime.now()}');
   final ok = await client.uploadFile('dartcheck.txt', content);
   print('upload ok: $ok');

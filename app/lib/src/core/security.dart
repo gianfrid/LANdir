@@ -216,7 +216,7 @@ String? sanitizeSinkPath(String raw, String uploadDir) {
 }
 
 /// Whether [host] from a server URL is a private, loopback, or link-local
-/// address — i.e. consistent with Landir's LAN-only design.
+/// address — i.e. consistent with LANdir's LAN-only design.
 ///
 /// Accepts IPv4 literals (with the same private ranges [findLanAddresses]
 /// treats as LAN), IPv6 loopback/link-local (fe80::/10, ::1), and single-

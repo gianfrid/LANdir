@@ -18,7 +18,7 @@ part 'client_provider.g.dart';
 const String _serversPrefsKey = 'landir_saved_servers';
 const String _lastServerPrefsKey = 'landir_last_server';
 
-/// A saved Landir server entry.
+/// A saved LANdir server entry.
 class SavedServer {
   final String name;
   final String baseUrl;
@@ -156,7 +156,7 @@ bool shouldLeaveBrowser(ClientState? prev, ClientState next) {
 
 @riverpod
 class ClientController extends _$ClientController {
-  LandirClient? _client;
+  LANdirClient? _client;
 
   @override
   ClientState build() => const ClientState();
@@ -212,7 +212,7 @@ class ClientController extends _$ClientController {
   ///
   /// URLs pointing outside the LAN (public IP or DNS name) are not added
   /// directly: they land in [ClientState.pendingNonLanServer] and the UI
-  /// must confirm them via [confirmPendingNonLanServer]. Landir is
+  /// must confirm them via [confirmPendingNonLanServer]. LANdir is
   /// LAN-only; a public address usually means a mistyped or malicious QR.
   ///
   /// A scan presenting a different host key for an already-pinned
@@ -312,7 +312,7 @@ class ClientController extends _$ClientController {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastServerPrefsKey, server.baseUrl);
     _client?.close();
-    _client = LandirClient(server.baseUrl, hostKey: server.hostKeyBytes);
+    _client = LANdirClient(server.baseUrl, hostKey: server.hostKeyBytes);
     try {
       final files = await _client!.listDir('');
       state = state.copyWith(files: files, loading: false);

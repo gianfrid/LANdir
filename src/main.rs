@@ -1,4 +1,4 @@
-//! Landir - a simple LAN file upload server (Rust implementation).
+//! LANdir - a simple LAN file upload server (Rust implementation).
 //!
 //! Usage:
 //!     landir [--port PORT] [--dir UPLOADS_DIR] [--insecure]

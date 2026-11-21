@@ -1,5 +1,5 @@
 // Tests for the share-intent upload flow in ClientController, against a
-// live LandirServer (same pattern as client_test.dart).
+// live LANdirServer (same pattern as client_test.dart).
 
 import 'dart:convert';
 import 'dart:io';
@@ -15,7 +15,7 @@ import 'package:test/test.dart';
 void main() {
   late String tmpDir; // server upload directory
   late String srcDir; // where test "shared" files live
-  late LandirServer server;
+  late LANdirServer server;
   late ProviderContainer container;
   late ProviderSubscription<ClientState> keepAlive;
 
@@ -28,7 +28,7 @@ void main() {
       uploadDir: tmpDir,
       insecure: true,
     );
-    server = LandirServer(config, DirectoryFileSink(tmpDir));
+    server = LANdirServer(config, DirectoryFileSink(tmpDir));
     await server.start();
     container = ProviderContainer();
     // clientControllerProvider is auto-dispose; keep it alive for the test.

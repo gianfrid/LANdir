@@ -1,4 +1,4 @@
-// Riverpod providers for the Landir host server lifecycle.
+// Riverpod providers for the LANdir host server lifecycle.
 
 import 'dart:async';
 import 'dart:io';
@@ -117,10 +117,10 @@ Future<FileSink> fileSink(Ref ref) async {
 String advertisedUrl(String address, int port, String? token) =>
     'http://$address:$port${token != null ? '/$token/' : '/'}';
 
-/// The running LandirServer instance (kept alive while running).
+/// The running LANdirServer instance (kept alive while running).
 @riverpod
 class ServerController extends _$ServerController {
-  LandirServer? _server;
+  LANdirServer? _server;
 
   @override
   ServerState build() => const ServerState();
@@ -147,7 +147,7 @@ class ServerController extends _$ServerController {
       // Host key (design 001, M1): generated once and persisted in the
       // app-support directory — never under uploads/.
       final hostKey = await HostKeyStore(appDir.path).loadOrCreate();
-      _server = LandirServer(config, sink, hostKey: hostKey);
+      _server = LANdirServer(config, sink, hostKey: hostKey);
       await _server!.start();
       final port = _server!.boundPort;
 

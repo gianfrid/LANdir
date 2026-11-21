@@ -1,6 +1,6 @@
 # Architecture
 
-Landir's goal is a shared network directory usable from any device (see
+LANdir's goal is a shared network directory usable from any device (see
 "Scope" in [README.md](README.md)). It is delivered through interchangeable
 host implementations — `landir.py` (Python, the reference), `src/` (Rust,
 containerized), and `app/` (Flutter, phone/desktop) — which must stay

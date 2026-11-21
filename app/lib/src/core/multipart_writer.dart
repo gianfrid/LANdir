@@ -1,5 +1,5 @@
 // Multipart writer: builds a multipart/form-data body for uploading files
-// to a Landir server. The inverse of multipart.dart's parser.
+// to a LANdir server. The inverse of multipart.dart's parser.
 
 import 'dart:convert';
 import 'dart:typed_data';

@@ -52,7 +52,7 @@ Future<(int, Uint8List)> sealedPost(
 }
 
 void main() {
-  late LandirServer server;
+  late LANdirServer server;
   late HttpClient client;
   late String base;
   const token = 'testtoken';
@@ -62,7 +62,7 @@ void main() {
     final keyDir = Directory.systemTemp.createTempSync('landir_sealed_key_');
     addTearDown(() => keyDir.deleteSync(recursive: true));
     hostKey = await HostKeyStore(keyDir.path).loadOrCreate();
-    server = LandirServer(
+    server = LANdirServer(
       ServerConfig(
           port: 0, uploadDir: tmpDir, insecure: false, secretToken: token),
       DirectoryFileSink(tmpDir),
@@ -148,7 +148,7 @@ void main() {
   });
 
   test('keyless host answers 404 on sealed endpoints', () async {
-    final keyless = LandirServer(
+    final keyless = LANdirServer(
       ServerConfig(
           port: 0, uploadDir: tmpDir, insecure: false, secretToken: 'nope'),
       DirectoryFileSink(tmpDir),
@@ -169,7 +169,7 @@ void main() {
   });
 
   test('maxUploadBytes applies to the decrypted payload -> 413', () async {
-    final limited = LandirServer(
+    final limited = LANdirServer(
       ServerConfig(
           port: 0,
           uploadDir: tmpDir,

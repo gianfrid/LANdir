@@ -44,7 +44,7 @@ void main() {
         ],
       }),
     );
-    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
     await tester.pumpAndSettle();
 
     expect(find.text('Encrypted'), findsOneWidget);
@@ -54,11 +54,11 @@ void main() {
   testWidgets('changed host key shows the re-pair dialog; keeping the old key cancels',
       (tester) async {
     usePhoneViewport(tester);
-    await tester.pumpWidget(const ProviderScope(child: LandirApp()));
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
     await tester.pumpAndSettle();
 
     // Drive the provider directly: pin a server, then rescan a different key.
-    final container = ProviderScope.containerOf(tester.element(find.byType(LandirApp)));
+    final container = ProviderScope.containerOf(tester.element(find.byType(LANdirApp)));
     final notifier = container.read(clientControllerProvider.notifier);
     final keyA = base64Url.encode(List.filled(32, 1)).replaceAll('=', '');
     final keyB = base64Url.encode(List.filled(32, 2)).replaceAll('=', '');
