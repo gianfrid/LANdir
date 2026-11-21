@@ -4,3 +4,4 @@ __pycache__/
 .agents/
 scripts/watch-apk.log
 scripts/.watch-apk-state
+/landir-*.AppImage
