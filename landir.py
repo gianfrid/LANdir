@@ -422,9 +422,17 @@ def qr_matrix(text: str):
 
 
 def qr_terminal(matrix, quiet=4):
-    """ANSI half-block rendering; dark modules on a white background."""
+    """ANSI half-block rendering: black QR modules on a white background.
+
+    Always black-on-white via truecolor RGB (38;2;0;0;0 / 48;2;255;255;255),
+    which bypasses the terminal palette entirely — palette-based codes
+    (47/107) render grey or get ignored depending on the terminal's
+    colorscheme. Terminals without truecolor support fall back to the
+    plain 30;47 (black on palette-7 white) prefix.
+    """
     n = len(matrix)
     w = n + 2 * quiet
+    prefix = "\x1b[30;47m\x1b[38;2;0;0;0;48;2;255;255;255m"
 
     def dark(r, c):
         return 0 <= r - quiet < n and 0 <= c - quiet < n and matrix[r - quiet][c - quiet]
@@ -436,7 +444,7 @@ def qr_terminal(matrix, quiet=4):
             top, bottom = dark(r, c), dark(r + 1, c)
             chunks.append("█" if top and bottom else "▀" if top
                           else "▄" if bottom else " ")
-        lines.append("\x1b[30;107m" + "".join(chunks) + "\x1b[0m")
+        lines.append(prefix + "".join(chunks) + "\x1b[0m")
     return "\n".join(lines)
 
 
@@ -1009,13 +1017,26 @@ def _curses_available():
         return False
 
 
-def _safe_add(win, y, x, text):
+def _safe_add(win, y, x, text, attr=0):
     """addnstr that never raises on the bottom-right cell / tiny terminals."""
     import curses
     try:
-        win.addnstr(y, x, text, max(0, win.getmaxyx()[1] - x - 1))
+        win.addnstr(y, x, text, max(0, win.getmaxyx()[1] - x - 1), attr)
     except curses.error:
         pass
+
+
+def _qr_white_color(n_colors):
+    """Best 'true white' color number for curses color pairs.
+
+    COLOR_WHITE is palette 7, which many terminal themes render as light
+    grey. When the terminal supports >= 16 colors, palette 15 is true white
+    (matches SGR 107 in plain mode); otherwise fall back to COLOR_WHITE.
+    """
+    import curses
+    if n_colors >= 16:
+        return 15
+    return curses.COLOR_WHITE
 
 
 def _ui_loop(stdscr, url):
@@ -1034,6 +1055,19 @@ def _ui_loop(stdscr, url):
     ansi = re.compile(r"\x1b\[[0-9;]*m")
     qr_lines = [ansi.sub("", l)
                 for l in qr_terminal(qr_matrix(url)).splitlines()]
+    # Draw the QR with an explicit color pair (black on white, palette 15
+    # for a true white when available) instead of terminal defaults, so it
+    # looks the same in every terminal theme.
+    qr_attr = 0
+    if curses.has_colors():
+        try:
+            curses.start_color()
+            curses.use_default_colors()
+            white = _qr_white_color(curses.COLORS)
+            curses.init_pair(1, curses.COLOR_BLACK, white)
+            qr_attr = curses.color_pair(1)
+        except curses.error:
+            qr_attr = 0
     while True:
         key = stdscr.getch()
         if key == ord("q"):
@@ -1061,7 +1095,7 @@ def _ui_loop(stdscr, url):
             for ql in qr_lines:
                 if line >= top_h - 1:
                     break
-                _safe_add(top, line, 0, ql)
+                _safe_add(top, line, 0, ql, qr_attr)
                 line += 1
         online = ACTIVITY.online()
         _safe_add(top, top_h - 1, 0,

@@ -281,11 +281,39 @@ class QRTests(unittest.TestCase):
         for line in lines:
             bare = re.sub(r"\x1b\[[0-9;]*m", "", line)
             self.assertEqual(len(bare), w)
-            self.assertTrue(line.startswith("\x1b[30;107m"))
+            # always black on true white: palette fallback 30;47 followed by
+            # the RGB fg/bg pair (38;2;0;0;0 / 48;2;255;255;255)
+            self.assertTrue(line.startswith("\x1b[30;47m\x1b[38;2;0;0;0;48;2;255;255;255m"))
             self.assertTrue(line.endswith("\x1b[0m"))
         self.assertEqual(set(re.sub(r"\x1b\[[0-9;]*m", "", lines[0])), {" "})
         self.assertEqual(set(re.sub(r"\x1b\[[0-9;]*m", "", lines[-1])), {" "})
         self.assertIn("▀", out)  # actually renders QR modules
+
+    def test_qr_terminal_always_black_on_white(self):
+        """Every line starts with the fixed fallback+truecolor SGR prefix and
+        ends with a reset, regardless of environment (no adaptive detection)."""
+        m = self.fds.qr_matrix("http://10.0.0.1:8000/")
+        out = self.fds.qr_terminal(m)
+        prefix = "\x1b[30;47m\x1b[38;2;0;0;0;48;2;255;255;255m"
+        for line in out.split("\n"):
+            self.assertTrue(line.startswith(prefix))
+            self.assertTrue(line.endswith("\x1b[0m"))
+
+    def test_qr_terminal_quiet_zone_blank(self):
+        """First and last rendered lines are pure quiet zone (spaces)."""
+        m = self.fds.qr_matrix("hi")
+        out = self.fds.qr_terminal(m, quiet=2)
+        bare = [re.sub(r"\x1b\[[0-9;]*m", "", l) for l in out.split("\n")]
+        self.assertTrue(all(c == " " for c in bare[0]))
+        self.assertTrue(all(c == " " for c in bare[-1]))
+
+    def test_qr_white_color_prefers_palette_15(self):
+        """_qr_white_color returns 15 on >=16-color terminals, else COLOR_WHITE."""
+        import curses
+        fds = self.fds
+        self.assertEqual(fds._qr_white_color(256), 15)
+        self.assertEqual(fds._qr_white_color(16), 15)
+        self.assertEqual(fds._qr_white_color(8), curses.COLOR_WHITE)
 
     def test_decodes_with_every_mask_valid(self):
         # build with each of the 8 masks and check the decoder recovers it
