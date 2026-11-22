@@ -1,12 +1,9 @@
 //! QR code generation for the startup URL: encode with the `qrcode` crate
 //! (byte mode, EC level M), render as ANSI half-blocks.
 //!
-//! Rendered with no explicit colors: modules use the terminal's default
-//! foreground on its default background, which always contrast (light
-//! terminal → black-on-white look; dark terminal → light-on-dark, an
-//! inverted QR that phone cameras decode fine). Explicit fg/bg codes break
-//! in some colorschemes (e.g. herdr renders palette white as black).
-//!
+//! Rendered with no SGR escapes: modules use the terminal's default
+//! foreground on its default background, so the QR follows the terminal's
+//! theme (normal on light terminals, inverted on dark ones).
 //! Versions are capped at 6 (106 bytes), matching the Python implementation;
 //! longer URLs (e.g. secret mode with an IPv6 host) print "no QR code" instead.
 
@@ -69,14 +66,14 @@ mod tests {
     fn encodes_url_within_version_cap() {
         let url = "http://192.168.1.10:8000/";
         let out = qr_terminal(url).unwrap();
-        // No color codes at all: default fg on default bg (always contrast)
+        // No color codes at all: modules inherit the terminal's fg/bg
         assert!(!out.contains('\u{1b}'));
         // deterministic
         assert_eq!(out, qr_terminal(url).unwrap());
     }
 
     #[test]
-    fn render_ansi_uses_black_on_white() {
+    fn render_ansi_emits_half_blocks_no_colors() {
         // 4x4 all-dark matrix with quiet zone → full block '█' in the middle
         let matrix = vec![vec![true; 4]; 4];
         let out = render_ansi(&matrix, 1);

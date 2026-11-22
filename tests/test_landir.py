@@ -281,7 +281,7 @@ class QRTests(unittest.TestCase):
         for line in lines:
             bare = re.sub(r"\x1b\[[0-9;]*m", "", line)
             self.assertEqual(len(bare), w)
-            # no color codes at all: default fg on default bg always contrasts
+            # no color codes at all: modules inherit the terminal's fg/bg
             self.assertNotIn("\x1b", line)
         self.assertEqual(set(re.sub(r"\x1b\[[0-9;]*m", "", lines[0])), {" "})
         self.assertEqual(set(re.sub(r"\x1b\[[0-9;]*m", "", lines[-1])), {" "})
@@ -320,6 +320,46 @@ class QRTests(unittest.TestCase):
                 out, read_mask = decode_qr(grid)
                 self.assertEqual(out, text)
                 self.assertEqual(read_mask, mask)
+
+
+class _FakeCurses:
+    """Just enough of the curses module to exercise the default-colors init."""
+
+    class error(Exception):
+        pass
+
+    def __init__(self, supported=True):
+        self.supported = supported
+        self.use_default_colors_calls = 0
+
+    def use_default_colors(self):
+        if not self.supported:
+            raise self.error("use_default_colors not supported")
+        self.use_default_colors_calls += 1
+
+
+class CursesDefaultColorsTests(unittest.TestCase):
+    """The curses UI must drop ncurses' white-on-black screen assumption.
+
+    On a color-capable terminal ncurses initializes the screen with explicit
+    SGR 37/40 (white on black) and erases with it, whatever the user's actual
+    theme — so a light terminal gets a dark UI and an inverted QR. The fix is
+    use_default_colors(), which makes pair 0 mean "terminal defaults".
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fds = load_server()
+
+    def test_drops_white_on_black_assumption(self):
+        fake = _FakeCurses(supported=True)
+        self.assertTrue(self.fds._use_terminal_default_colors(fake))
+        self.assertEqual(fake.use_default_colors_calls, 1)
+
+    def test_tolerates_missing_extension(self):
+        # some curses builds lack the extension; the UI must still start
+        fake = _FakeCurses(supported=False)
+        self.assertFalse(self.fds._use_terminal_default_colors(fake))
 
 
 class SafeNameTests(unittest.TestCase):

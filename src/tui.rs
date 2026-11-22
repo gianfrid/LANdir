@@ -67,9 +67,9 @@ pub fn run(activity: &ActivityLog, url: &str) -> std::io::Result<()> {
     result
 }
 
-/// QR line style: terminal defaults (no explicit fg/bg) — the default
-/// foreground always contrasts with the default background, so the QR is
-/// camera-readable in both light and dark terminals (inverted on dark).
+/// QR line style: no SGR escapes — modules use the terminal's default
+/// fg/bg and the QR follows its theme (normal on light terminals, inverted
+/// on dark terminals).
 fn qr_line_style() -> ratatui::style::Style {
     ratatui::style::Style::new()
 }
@@ -79,10 +79,10 @@ fn event_loop(
     activity: &ActivityLog,
     url: &str,
 ) -> std::io::Result<()> {
-    // qr_terminal emits ANSI color escapes; ratatui would print them
-    // literally, so strip them (matches the Python curses TUI) and re-apply
-    // the same fg/bg pair as an explicit style, so the QR stays scannable
-    // even when the terminal's default colors disagree with its theme.
+    // qr_terminal emits no SGR escapes (strip_ansi runs anyway so the two
+    // implementations stay interchangeable), and qr_line_style() sets no
+    // fg/bg — so the QR renders in raw terminal defaults whatever the
+    // terminal theme. Mirrors the Python TUI's use_default_colors().
     let qr_style = qr_line_style();
     let qr_lines: Vec<Line<'static>> = crate::qr::qr_terminal(url)
         .unwrap_or_default()

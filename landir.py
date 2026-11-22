@@ -422,13 +422,11 @@ def qr_matrix(text: str):
 
 
 def qr_terminal(matrix, quiet=4):
-    """ANSI half-block rendering with no explicit colors at all.
-
-    Modules are drawn in the terminal's default foreground on its default
-    background, which always contrast: light terminal → black-on-white look,
-    dark terminal → light-on-dark (an inverted QR, which phone cameras
-    decode fine). Setting any explicit fg/bg breaks in some colorschemes
-    (e.g. herdr renders palette white as black), so we set nothing.
+    """ANSI half-block rendering (▀/▄/█) with no SGR escapes at all, so
+    modules inherit the terminal's default fg/bg and the QR follows its
+    theme: normal on light terminals, inverted on dark ones. The curses
+    UI additionally needs _use_terminal_default_colors(), since ncurses
+    would otherwise paint its own screen "white on black" (see there).
     """
     n = len(matrix)
     w = n + 2 * quiet
@@ -1017,6 +1015,23 @@ def _curses_available():
         return False
 
 
+def _use_terminal_default_colors(curses):
+    """Drop ncurses' built-in white-on-black screen assumption.
+
+    On any color-capable TERM, ncurses initializes stdscr with explicit
+    SGR 37/40 (white on black) and erases the screen with that background,
+    whatever the user's actual theme — so a light terminal gets a dark UI
+    with an inverted QR. use_default_colors() makes pair 0 and the screen
+    background mean "terminal defaults" instead. Not every curses build
+    has the extension; return False there so the UI still starts.
+    """
+    try:
+        curses.use_default_colors()
+        return True
+    except curses.error:
+        return False
+
+
 def _safe_add(win, y, x, text, attr=0):
     """addnstr that never raises on the bottom-right cell / tiny terminals."""
     import curses
@@ -1030,6 +1045,7 @@ def _ui_loop(stdscr, url):
     """Full-screen UI: QR + online clients on top, scrollable event log below.
     'q' toggles the QR panel, arrows/PgUp/PgDn scroll the log, Ctrl+C quits."""
     import curses
+    _use_terminal_default_colors(curses)
     curs_set_ok = True
     try:
         curses.curs_set(0)
@@ -1039,10 +1055,7 @@ def _ui_loop(stdscr, url):
     show_qr = True
     scroll = 0  # how many lines the log is scrolled up from the bottom
     qr_lines = qr_terminal(qr_matrix(url)).splitlines()
-    # qr_terminal emits no color codes; draw the QR with the terminal's
-    # default colors (default fg always contrasts with default bg, so the
-    # code is camera-readable in light and dark terminals alike).
-    qr_attr = 0
+    qr_attr = 0  # pair 0 = terminal defaults after use_default_colors()
     while True:
         key = stdscr.getch()
         if key == ord("q"):
