@@ -422,17 +422,18 @@ def qr_matrix(text: str):
 
 
 def qr_terminal(matrix, quiet=4):
-    """ANSI half-block rendering: black QR modules on a white background.
+    """ANSI half-block rendering: black QR modules, transparent background.
 
-    Always black-on-white via truecolor RGB (38;2;0;0;0 / 48;2;255;255;255),
-    which bypasses the terminal palette entirely — palette-based codes
-    (47/107) render grey or get ignored depending on the terminal's
-    colorscheme. Terminals without truecolor support fall back to the
-    plain 30;47 (black on palette-7 white) prefix.
+    Only the foreground is set to black (SGR 30) — the background is left
+    at the terminal's own default, so the quiet zone and light modules show
+    through in the terminal's real background color. This keeps the code
+    scannable from a camera in every terminal, including ones whose palette
+    or colorscheme cannot produce a true white (e.g. herdr), where painting
+    an explicit white background renders black.
     """
     n = len(matrix)
     w = n + 2 * quiet
-    prefix = "\x1b[30;47m\x1b[38;2;0;0;0;48;2;255;255;255m"
+    prefix = "\x1b[30m"
 
     def dark(r, c):
         return 0 <= r - quiet < n and 0 <= c - quiet < n and matrix[r - quiet][c - quiet]
@@ -1026,19 +1027,6 @@ def _safe_add(win, y, x, text, attr=0):
         pass
 
 
-def _qr_white_color(n_colors):
-    """Best 'true white' color number for curses color pairs.
-
-    COLOR_WHITE is palette 7, which many terminal themes render as light
-    grey. When the terminal supports >= 16 colors, palette 15 is true white
-    (matches SGR 107 in plain mode); otherwise fall back to COLOR_WHITE.
-    """
-    import curses
-    if n_colors >= 16:
-        return 15
-    return curses.COLOR_WHITE
-
-
 def _ui_loop(stdscr, url):
     """Full-screen UI: QR + online clients on top, scrollable event log below.
     'q' toggles the QR panel, arrows/PgUp/PgDn scroll the log, Ctrl+C quits."""
@@ -1055,16 +1043,15 @@ def _ui_loop(stdscr, url):
     ansi = re.compile(r"\x1b\[[0-9;]*m")
     qr_lines = [ansi.sub("", l)
                 for l in qr_terminal(qr_matrix(url)).splitlines()]
-    # Draw the QR with an explicit color pair (black on white, palette 15
-    # for a true white when available) instead of terminal defaults, so it
-    # looks the same in every terminal theme.
+    # Draw the QR glyphs in black on the terminal's own default background
+    # (bg = -1 after use_default_colors): painting an explicit white bg
+    # renders black in some colorschemes (herdr), making the code unreadable.
     qr_attr = 0
     if curses.has_colors():
         try:
             curses.start_color()
             curses.use_default_colors()
-            white = _qr_white_color(curses.COLORS)
-            curses.init_pair(1, curses.COLOR_BLACK, white)
+            curses.init_pair(1, curses.COLOR_BLACK, -1)
             qr_attr = curses.color_pair(1)
         except curses.error:
             qr_attr = 0
