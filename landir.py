@@ -422,18 +422,17 @@ def qr_matrix(text: str):
 
 
 def qr_terminal(matrix, quiet=4):
-    """ANSI half-block rendering: black QR modules, transparent background.
+    """ANSI half-block rendering with no explicit colors at all.
 
-    Only the foreground is set to black (SGR 30) — the background is left
-    at the terminal's own default, so the quiet zone and light modules show
-    through in the terminal's real background color. This keeps the code
-    scannable from a camera in every terminal, including ones whose palette
-    or colorscheme cannot produce a true white (e.g. herdr), where painting
-    an explicit white background renders black.
+    Modules are drawn in the terminal's default foreground on its default
+    background, which always contrast: light terminal → black-on-white look,
+    dark terminal → light-on-dark (an inverted QR, which phone cameras
+    decode fine). Setting any explicit fg/bg breaks in some colorschemes
+    (e.g. herdr renders palette white as black), so we set nothing.
     """
     n = len(matrix)
     w = n + 2 * quiet
-    prefix = "\x1b[30m"
+    prefix = ""
 
     def dark(r, c):
         return 0 <= r - quiet < n and 0 <= c - quiet < n and matrix[r - quiet][c - quiet]
@@ -445,7 +444,7 @@ def qr_terminal(matrix, quiet=4):
             top, bottom = dark(r, c), dark(r + 1, c)
             chunks.append("█" if top and bottom else "▀" if top
                           else "▄" if bottom else " ")
-        lines.append(prefix + "".join(chunks) + "\x1b[0m")
+        lines.append("".join(chunks))
     return "\n".join(lines)
 
 
@@ -1039,22 +1038,11 @@ def _ui_loop(stdscr, url):
     stdscr.nodelay(True)
     show_qr = True
     scroll = 0  # how many lines the log is scrolled up from the bottom
-    # qr_terminal emits ANSI color escapes; curses would print them literally
-    ansi = re.compile(r"\x1b\[[0-9;]*m")
-    qr_lines = [ansi.sub("", l)
-                for l in qr_terminal(qr_matrix(url)).splitlines()]
-    # Draw the QR glyphs in black on the terminal's own default background
-    # (bg = -1 after use_default_colors): painting an explicit white bg
-    # renders black in some colorschemes (herdr), making the code unreadable.
+    qr_lines = qr_terminal(qr_matrix(url)).splitlines()
+    # qr_terminal emits no color codes; draw the QR with the terminal's
+    # default colors (default fg always contrasts with default bg, so the
+    # code is camera-readable in light and dark terminals alike).
     qr_attr = 0
-    if curses.has_colors():
-        try:
-            curses.start_color()
-            curses.use_default_colors()
-            curses.init_pair(1, curses.COLOR_BLACK, -1)
-            qr_attr = curses.color_pair(1)
-        except curses.error:
-            qr_attr = 0
     while True:
         key = stdscr.getch()
         if key == ord("q"):

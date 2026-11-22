@@ -281,23 +281,19 @@ class QRTests(unittest.TestCase):
         for line in lines:
             bare = re.sub(r"\x1b\[[0-9;]*m", "", line)
             self.assertEqual(len(bare), w)
-            # black modules, transparent bg: SGR 30 only (terminal's own
-            # background shows through the quiet zone)
-            self.assertTrue(line.startswith("\x1b[30m"))
-            self.assertFalse(line.startswith("\x1b[30;"))  # no explicit bg
-            self.assertTrue(line.endswith("\x1b[0m"))
+            # no color codes at all: default fg on default bg always contrasts
+            self.assertNotIn("\x1b", line)
         self.assertEqual(set(re.sub(r"\x1b\[[0-9;]*m", "", lines[0])), {" "})
         self.assertEqual(set(re.sub(r"\x1b\[[0-9;]*m", "", lines[-1])), {" "})
         self.assertIn("▀", out)  # actually renders QR modules
 
-    def test_qr_terminal_black_on_transparent(self):
-        """Every line starts with SGR 30 (black fg, no explicit bg — the
-        terminal's own background shows through) and ends with a reset."""
+    def test_qr_terminal_no_color_codes(self):
+        """Output contains no ANSI escapes: modules render in the terminal's
+        default fg on its default bg, readable in light and dark terminals."""
         m = self.fds.qr_matrix("http://10.0.0.1:8000/")
         out = self.fds.qr_terminal(m)
-        for line in out.split("\n"):
-            self.assertTrue(line.startswith("\x1b[30m"))
-            self.assertTrue(line.endswith("\x1b[0m"))
+        self.assertNotIn("\x1b", out)
+        self.assertIn("▀", out)
 
     def test_qr_terminal_quiet_zone_blank(self):
         """First and last rendered lines are pure quiet zone (spaces)."""
@@ -723,7 +719,7 @@ class StartupSmokeTest(unittest.TestCase):
                     # stop once the QR (rendered after the Open URL line)
                     # is fully printed or explicitly skipped
                     if ("(no QR" in line.decode()
-                            or ("▀" in text and len(out) > 2000)):
+                            or "▀" in text):
                         break
                 text = out.decode()
                 self.assertIn("▀", text)  # QR rendered

@@ -67,13 +67,11 @@ pub fn run(activity: &ActivityLog, url: &str) -> std::io::Result<()> {
     result
 }
 
-/// QR line style: black modules with no explicit background, so the
-/// terminal's own background shows through the quiet zone — scannable from
-/// a camera in any terminal, unlike a painted white bg that some
-/// colorschemes (herdr) render black.
+/// QR line style: terminal defaults (no explicit fg/bg) — the default
+/// foreground always contrasts with the default background, so the QR is
+/// camera-readable in both light and dark terminals (inverted on dark).
 fn qr_line_style() -> ratatui::style::Style {
-    use ratatui::style::{Color, Style};
-    Style::new().fg(Color::Black)
+    ratatui::style::Style::new()
 }
 
 fn event_loop(
@@ -189,11 +187,10 @@ mod tests {
     }
 
     #[test]
-    fn qr_line_style_is_black_on_transparent() {
-        use ratatui::style::Color;
+    fn qr_line_style_uses_terminal_defaults() {
         let style = qr_line_style();
-        assert_eq!(style.fg, Some(Color::Black));
-        assert_eq!(style.bg, None); // terminal default shows through
+        assert_eq!(style.fg, None);
+        assert_eq!(style.bg, None);
     }
 
     #[test]

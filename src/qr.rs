@@ -1,11 +1,11 @@
 //! QR code generation for the startup URL: encode with the `qrcode` crate
 //! (byte mode, EC level M), render as ANSI half-blocks.
 //!
-//! Black QR modules with no explicit background: SGR 30 sets only the
-//! foreground, leaving the terminal's own background to show through the
-//! quiet zone. This stays scannable from a camera in every terminal —
-//! including ones whose palette/colorscheme cannot produce a true white
-//! (e.g. herdr), where painting an explicit white bg renders black.
+//! Rendered with no explicit colors: modules use the terminal's default
+//! foreground on its default background, which always contrast (light
+//! terminal → black-on-white look; dark terminal → light-on-dark, an
+//! inverted QR that phone cameras decode fine). Explicit fg/bg codes break
+//! in some colorschemes (e.g. herdr renders palette white as black).
 //!
 //! Versions are capped at 6 (106 bytes), matching the Python implementation;
 //! longer URLs (e.g. secret mode with an IPv6 host) print "no QR code" instead.
@@ -29,12 +29,11 @@ pub fn qr_terminal(text: &str) -> Result<String, String> {
     Ok(render_ansi(&matrix, 4))
 }
 
-/// ANSI half-block rendering: black modules, transparent background (SGR 30
-/// only — the terminal's own bg shows through the quiet zone).
+/// ANSI half-block rendering with no color codes — terminal default fg/bg.
 fn render_ansi(matrix: &[Vec<bool>], quiet: usize) -> String {
     let n = matrix.len();
     let w = n + 2 * quiet;
-    let prefix = "\u{1b}[30m";
+    let prefix = "";
     let dark = |r: usize, c: usize| -> bool {
         r >= quiet && r - quiet < n && c >= quiet && c - quiet < n && matrix[r - quiet][c - quiet]
     };
@@ -55,7 +54,7 @@ fn render_ansi(matrix: &[Vec<bool>], quiet: usize) -> String {
                 ' '
             });
         }
-        line.push_str("\u{1b}[0m");
+        line.push_str("");
         lines.push(line);
         r += 2;
     }
@@ -70,8 +69,8 @@ mod tests {
     fn encodes_url_within_version_cap() {
         let url = "http://192.168.1.10:8000/";
         let out = qr_terminal(url).unwrap();
-        // Black modules, transparent bg: SGR 30 only
-        assert!(out.contains("\u{1b}[30m"));
+        // No color codes at all: default fg on default bg (always contrast)
+        assert!(!out.contains('\u{1b}'));
         // deterministic
         assert_eq!(out, qr_terminal(url).unwrap());
     }
@@ -81,7 +80,7 @@ mod tests {
         // 4x4 all-dark matrix with quiet zone → full block '█' in the middle
         let matrix = vec![vec![true; 4]; 4];
         let out = render_ansi(&matrix, 1);
-        assert!(out.starts_with("\u{1b}[30m"));
+        assert!(!out.contains('\u{1b}'));
         assert!(out.contains('█'));
     }
 
@@ -90,17 +89,7 @@ mod tests {
         // quiet zone rows/cols must be spaces (the background color shows through)
         let matrix = vec![vec![true; 2]; 2];
         let out = render_ansi(&matrix, 2);
-        let bare: Vec<String> = out
-            .lines()
-            .map(|l| {
-                l.chars()
-                    .filter(|c| *c != '\u{1b}')
-                    .collect::<String>()
-                    // strip the SGR params too
-                    .replace("[30m", "")
-                    .replace("[0m", "")
-            })
-            .collect();
+        let bare: Vec<String> = out.lines().map(|l| l.to_string()).collect();
         // first line is all quiet zone → all spaces
         assert!(bare[0].chars().all(|c| c == ' '));
         // last line is all quiet zone → all spaces
