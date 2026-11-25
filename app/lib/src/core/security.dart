@@ -166,8 +166,12 @@ String safeName(String name, String uploadDir) {
 
 /// Sanitize a single path component. Port of landir.py _safe_path_component().
 /// Returns the sanitized component, or '' if invalid.
-String safePathComponent(String name) {
-  var n = percentDecode(name).replaceAll('\\', '/');
+///
+/// [decode] percent-decodes first, as the plaintext HTTP routes need (the
+/// wire path is URL-encoded). The sealed endpoints carry the path verbatim
+/// in the envelope, so they pass [decode]: false.
+String safePathComponent(String name, {bool decode = true}) {
+  var n = (decode ? percentDecode(name) : name).replaceAll('\\', '/');
   n = _basename(n);
   n = n.replaceAll(_controlChars, '').trim();
   if (n.isEmpty || n.startsWith('.')) return '';
@@ -221,12 +225,17 @@ String? downloadLookup(String raw, String uploadDir) {
 /// Sanitize a client-requested path into a relative path safe for a FileSink.
 /// Same rules as downloadLookup but without the filesystem isfile check —
 /// the sink decides whether the target exists. Returns null if rejected.
-String? sanitizeSinkPath(String raw, String uploadDir) {
-  final decoded = percentDecode(raw);
+///
+/// [decode] percent-decodes first (plaintext HTTP routes, where the wire
+/// path is URL-encoded); sealed endpoints pass false because their envelope
+/// carries the path verbatim.
+String? sanitizeSinkPath(String raw, String uploadDir,
+    {bool decode = true}) {
+  final decoded = decode ? percentDecode(raw) : raw;
   final parts = decoded.split('/');
   final sanitized = <String>[];
   for (final part in parts) {
-    final s = safePathComponent(part);
+    final s = safePathComponent(part, decode: decode);
     if (s.isEmpty) return null;
     sanitized.add(s);
   }

@@ -75,16 +75,33 @@ class MediaStoreFileSink implements FileSink {
   }
 
   @override
+  Future<bool> isDir(String relPath) async {
+    // A folder "exists" in MediaStore when any Downloads row lives under
+    // its RELATIVE_PATH prefix; the native side answers that query.
+    try {
+      return await mediaStoreChannel.invokeMethod<bool>('dirExists', {
+            'name': relPath,
+          }) ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
   Future<List<FileEntry>> list(String relPath) async {
     try {
-      final result = await mediaStoreChannel.invokeMethod<List<dynamic>>('listFiles');
+      // The native side lists the DIRECT children of [relPath] ('' = root),
+      // reporting subfolders as is_dir entries so clients can navigate.
+      final result = await mediaStoreChannel
+          .invokeMethod<List<dynamic>>('listFiles', {'path': relPath});
       if (result == null) return [];
       return result.map((e) {
         final m = e as Map<dynamic, dynamic>;
         return FileEntry(
           name: m['name'] as String,
           size: (m['size'] as num).toInt(),
-          isDir: false,
+          isDir: m['is_dir'] == true,
           mtime: DateTime.fromMillisecondsSinceEpoch(
               ((m['mtime'] as num) * 1000).toInt()),
         );

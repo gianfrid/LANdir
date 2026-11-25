@@ -36,6 +36,9 @@ class _SetBackedSink implements FileSink {
   Future<bool> exists(String name) async => _written.contains(name);
 
   @override
+  Future<bool> isDir(String relPath) => inner.isDir(relPath);
+
+  @override
   Future<List<FileEntry>> list(String relPath) => inner.list(relPath);
 }
 

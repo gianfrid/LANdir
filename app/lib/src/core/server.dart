@@ -403,9 +403,12 @@ class LANdirServer {
       return;
     }
     if (base == '${p}sfiles' || base == '${p}sls') {
+      // The sealed plaintext carries the path VERBATIM (not URL-encoded
+      // like the plaintext routes), so sanitize without percent-decoding —
+      // a real folder named "100%20off" must not be mangled to "100 off".
       final json = base == '${p}sfiles'
           ? await _listingJsonBytes('')
-          : await _listingJsonBytesForPath(utf8.decode(plain));
+          : await _listingJsonBytesForPath(utf8.decode(plain), decode: false);
       if (json == null) {
         _sendError(req, 404);
         return;
@@ -413,8 +416,9 @@ class LANdirServer {
       await respondSealed(json);
       return;
     }
-    // sfl: sealed download
-    final rel = sanitizeSinkPath(utf8.decode(plain), config.uploadDir);
+    // sfl: sealed download (same verbatim-path rule as sls)
+    final rel = sanitizeSinkPath(utf8.decode(plain), config.uploadDir,
+        decode: false);
     if (rel == null) {
       _sendError(req, 404);
       return;
@@ -437,14 +441,16 @@ class LANdirServer {
   /// Nested-listing JSON bytes after sanitizing [rawRelPath]; null when the
   /// path is rejected or the directory doesn't exist (both 404, matching
   /// the Python reference).
-  Future<List<int>?> _listingJsonBytesForPath(String rawRelPath) async {
-    final sanitized = sanitizeSinkPath(rawRelPath, config.uploadDir);
+  Future<List<int>?> _listingJsonBytesForPath(String rawRelPath,
+      {bool decode = true}) async {
+    final sanitized =
+        sanitizeSinkPath(rawRelPath, config.uploadDir, decode: decode);
     if (sanitized == null) return null;
     final dirPath = sanitized == '.' ? '' : sanitized;
-    final dir = Directory(dirPath.isEmpty
-        ? config.uploadDir
-        : '${config.uploadDir}/$dirPath');
-    if (!dir.existsSync()) return null;
+    // Existence is the SINK's call, not the filesystem's: on app hosts the
+    // sink root is not config.uploadDir (MediaStore on Android, Documents
+    // on iOS/desktop), so checking uploadDir on disk would 404 every folder.
+    if (!await sink.isDir(dirPath)) return null;
     return _listingJsonBytes(dirPath);
   }
 

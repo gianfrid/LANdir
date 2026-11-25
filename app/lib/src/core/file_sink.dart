@@ -25,6 +25,12 @@ abstract class FileSink {
   /// instead of an OS-level " (1)" rename.
   Future<bool> exists(String name);
 
+  /// Whether [relPath] ('' = root) is an existing directory in this sink's
+  /// storage. The server core uses this instead of touching the filesystem
+  /// itself: on app hosts the sink root is NOT the uploadDir (MediaStore on
+  /// Android, Documents on iOS/desktop), so a local check would always miss.
+  Future<bool> isDir(String relPath);
+
   /// List entries in a directory (relative path, '' for root).
   Future<List<FileEntry>> list(String relPath);
 }
@@ -102,6 +108,13 @@ class DirectoryFileSink implements FileSink {
   Future<bool> exists(String name) async {
     final file = File('$rootDir/$name');
     return file.existsSync() && !FileSystemEntity.isDirectorySync(file.path);
+  }
+
+  @override
+  Future<bool> isDir(String relPath) async {
+    final dir =
+        relPath.isEmpty ? Directory(rootDir) : Directory('$rootDir/$relPath');
+    return dir.existsSync();
   }
 
   @override

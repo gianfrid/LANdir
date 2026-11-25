@@ -105,7 +105,19 @@ class MainActivity : FlutterActivity() {
                         result.success(resolveInDownloads(name))
                     }
                     "listFiles" -> {
-                        result.success(listDownloads())
+                        // Optional "path": relative dir to list ('' or absent
+                        // = root). Returns the DIRECT children, with subfolders
+                        // reported as {"is_dir": true} entries so clients can
+                        // navigate the folder tree.
+                        val path = call.argument<String>("path") ?: ""
+                        result.success(listDownloads(path))
+                    }
+                    // Whether a relative dir exists: on API 29+ a folder
+                    // "exists" when any Downloads row lives under its
+                    // RELATIVE_PATH prefix (dirs have no row of their own).
+                    "dirExists" -> {
+                        val rel = call.argument<String>("name") ?: ""
+                        result.success(dirExists(rel))
                     }
                     "readFile" -> {
                         val name = call.argument<String>("name")!!
@@ -322,7 +334,11 @@ class MainActivity : FlutterActivity() {
         return null
     }
 
-    private fun listDownloads(): List<Map<String, Any>> {
+    // Direct children of the relative dir [rel] ('' = Downloads root):
+    // files directly inside it plus one is_dir entry per subfolder (size 0,
+    // mtime = newest file inside). Below API 29 subfolders don't exist
+    // (paths are flattened into DISPLAY_NAME), so only the root lists.
+    private fun listDownloads(rel: String): List<Map<String, Any>> {
         val resolver = applicationContext.contentResolver
         val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val projection = mutableListOf(
@@ -333,24 +349,68 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             projection.add(MediaStore.Downloads.RELATIVE_PATH)
         }
-        val result = mutableListOf<Map<String, Any>>()
+        val prefix = if (rel.isEmpty()) "" else "$rel/"
+        val files = mutableListOf<Map<String, Any>>()
+        val dirs = mutableMapOf<String, Long>() // dir name -> newest mtime inside
         resolver.query(collection, projection.toTypedArray(), null, null, null)?.use { cursor ->
             while (cursor.moveToNext()) {
                 var name = cursor.getString(0) ?: ""
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     // Recompose the full relative path so folder uploads
                     // keep their structure in the listing.
-                    val rel = cursor.getString(3)?.removePrefix("Download/") ?: ""
-                    if (rel.isNotEmpty()) name = "$rel$name"
+                    val rowRel = cursor.getString(3)?.removePrefix("Download/") ?: ""
+                    if (rowRel.isNotEmpty()) name = "$rowRel$name"
+                } else if (rel.isNotEmpty()) {
+                    continue // pre-Q: no subdirs exist
                 }
-                result.add(mapOf(
-                    "name" to name,
-                    "size" to cursor.getLong(1),
-                    "mtime" to (cursor.getLong(2) / 1000), // seconds
-                ))
+                if (rel.isNotEmpty() && !name.startsWith(prefix)) continue
+                val rest = if (rel.isEmpty()) name else name.substring(prefix.length)
+                if (rest.isEmpty()) continue
+                val mtimeSec = cursor.getLong(2) / 1000
+                val slash = rest.indexOf('/')
+                if (slash >= 0) {
+                    val dirName = rest.substring(0, slash)
+                    dirs[dirName] = maxOf(dirs[dirName] ?: 0L, mtimeSec)
+                } else {
+                    files.add(mapOf(
+                        "name" to rest,
+                        "size" to cursor.getLong(1),
+                        "mtime" to mtimeSec,
+                        "is_dir" to false,
+                    ))
+                }
             }
         }
-        return result
+        for ((dirName, mtime) in dirs) {
+            files.add(mapOf(
+                "name" to dirName,
+                "size" to 0L,
+                "mtime" to mtime,
+                "is_dir" to true,
+            ))
+        }
+        return files
+    }
+
+    // A folder exists when any Downloads row lives under its RELATIVE_PATH
+    // prefix ("Download/<rel>/..."); RELATIVE_PATH only exists on API 29+.
+    private fun dirExists(rel: String): Boolean {
+        if (rel.isEmpty()) return true
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        val resolver = applicationContext.contentResolver
+        val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val prefix = "Download/$rel/"
+        // Escape LIKE wildcards ('%', '_', '\') in the prefix, then match
+        // everything below it.
+        val pattern = prefix
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_") + "%"
+        val selection = "${MediaStore.Downloads.RELATIVE_PATH} LIKE ? ESCAPE '\\'"
+        resolver.query(collection, arrayOf(MediaStore.Downloads._ID), selection, arrayOf(pattern), null)?.use { cursor ->
+            return cursor.moveToFirst()
+        }
+        return false
     }
 
     private fun sizeInDownloads(name: String): Int {
