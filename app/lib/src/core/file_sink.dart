@@ -63,6 +63,9 @@ class DirectoryFileSink implements FileSink {
   @override
   Future<String> write(String name, Stream<List<int>> bytes) async {
     final file = File('$rootDir/$name');
+    // Folder uploads carry relative paths ("sub/file.txt") — the parent
+    // directories may not exist yet.
+    file.parent.createSync(recursive: true);
     final sink = file.openWrite();
     await bytes.pipe(sink);
     return file.path;

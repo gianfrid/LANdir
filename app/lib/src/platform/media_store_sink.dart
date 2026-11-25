@@ -38,10 +38,11 @@ class MediaStoreFileSink implements FileSink {
 
   @override
   Future<Stream<List<int>>?> openRead(String name) async {
-    final base = name.split('/').last;
+    // Full relative path ("sub/file.txt"); the native side splits it into
+    // RELATIVE_PATH + DISPLAY_NAME for the MediaStore query.
     try {
       final bytes = await mediaStoreChannel.invokeMethod<Uint8List>('readFile', {
-        'name': base,
+        'name': name,
       });
       if (bytes == null) return null;
       return Stream.value(bytes);
@@ -52,10 +53,9 @@ class MediaStoreFileSink implements FileSink {
 
   @override
   Future<int?> sizeOf(String name) async {
-    final base = name.split('/').last;
     try {
       return await mediaStoreChannel.invokeMethod<int>('fileSize', {
-        'name': base,
+        'name': name,
       });
     } catch (_) {
       return null;
@@ -64,10 +64,9 @@ class MediaStoreFileSink implements FileSink {
 
   @override
   Future<bool> exists(String name) async {
-    final base = name.split('/').last;
     try {
       return await mediaStoreChannel.invokeMethod<bool>('fileExists', {
-            'name': base,
+            'name': name,
           }) ==
           true;
     } catch (_) {

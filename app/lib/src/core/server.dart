@@ -49,6 +49,83 @@ class ServerConfig {
   String get listPrefix => '${pagePath}ls/';
 }
 
+/// A locally-picked file to write into the host's own sink (host-view
+/// "Add files"): same sanitization and collision rules as remote uploads.
+class LocalFile {
+  final String name;
+  final Uint8List bytes;
+  const LocalFile(this.name, this.bytes);
+}
+
+/// Outcome of [saveLocalFiles]: how many files wrote, and why the rest
+/// failed (per-file, so one bad name never blocks the batch).
+class LocalFilesResult {
+  final int ok;
+  final List<String> failures;
+  const LocalFilesResult(this.ok, this.failures);
+  bool get allOk => failures.isEmpty;
+}
+
+/// Write [files] through [sink] exactly like an HTTP upload would:
+/// safeName() first, then sink-level collision renaming ("stem (N).ext")
+/// for storages (MediaStore) whose existing files safeName can't see.
+Future<LocalFilesResult> saveLocalFiles(
+    FileSink sink, String uploadDir, List<LocalFile> files) async {
+  var ok = 0;
+  final failures = <String>[];
+  for (final f in files) {
+    try {
+      var name = safeName(f.name, uploadDir);
+      var n = 1;
+      while (await sink.exists(name)) {
+        name = numberedName(safeName(f.name, uploadDir), n++);
+      }
+      await sink.write(name, Stream.value(f.bytes));
+      ok++;
+    } catch (e) {
+      failures.add('${f.name}: $e');
+    }
+  }
+  return LocalFilesResult(ok, failures);
+}
+
+/// A file from a picked folder tree: [path] is the relative path inside
+/// the picked folder ("sub/photo.jpg"), preserved as the upload path.
+class LocalPathFile {
+  final String path;
+  final Uint8List bytes;
+  const LocalPathFile(this.path, this.bytes);
+}
+
+/// Like [saveLocalFiles] but preserves directory structure: [f.path] may
+/// contain '/', is sanitized component-wise by sanitizeUploadPath(), and
+/// collisions get the numbered suffix on the last component
+/// ("sub/photo.jpg" → "sub/photo (1).jpg").
+Future<LocalFilesResult> saveLocalPaths(
+    FileSink sink, String uploadDir, List<LocalPathFile> files) async {
+  var ok = 0;
+  final failures = <String>[];
+  for (final f in files) {
+    try {
+      final cleaned = sanitizeUploadPath(f.path, uploadDir);
+      if (cleaned == null) {
+        failures.add('${f.path}: rejected');
+        continue;
+      }
+      var rel = cleaned;
+      var n = 1;
+      while (await sink.exists(rel)) {
+        rel = numberedName(rel, n++);
+      }
+      await sink.write(rel, Stream.value(f.bytes));
+      ok++;
+    } catch (e) {
+      failures.add('${f.path}: $e');
+    }
+  }
+  return LocalFilesResult(ok, failures);
+}
+
 /// A running LANdir server instance.
 class LANdirServer {
   final ServerConfig config;

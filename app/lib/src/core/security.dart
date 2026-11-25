@@ -175,6 +175,28 @@ String safePathComponent(String name) {
   return n;
 }
 
+/// Sanitize a relative upload path that may contain directories (folder
+/// uploads from the host-view "Add folder"): each '/'-separated component
+/// goes through the SAME whitelist as safeName() (control chars stripped,
+/// leading dots removed, disallowed chars replaced with '_'), and the
+/// resolved path must stay inside [uploadDir]. Returns the cleaned
+/// relative path, or null when every component is rejected.
+String? sanitizeUploadPath(String raw, String uploadDir) {
+  final n = percentDecode(raw).replaceAll('\\', '/');
+  final parts = <String>[];
+  for (final part in n.split('/')) {
+    var c = part.replaceAll(_controlChars, '').trim();
+    c = c.replaceFirst(RegExp(r'^\.+'), '');
+    c = _replaceDisallowed(c);
+    if (c.isEmpty || c.replaceAll('.', '').isEmpty) return null;
+    parts.add(c);
+  }
+  if (parts.isEmpty) return null;
+  final rel = parts.join('/');
+  if (!insideUploads('$uploadDir/$rel', uploadDir)) return null;
+  return rel;
+}
+
 /// Resolve a client-requested download path to a file inside [uploadDir].
 /// Port of landir.py download_lookup(). Returns the absolute path, or null
 /// if the name is rejected.
