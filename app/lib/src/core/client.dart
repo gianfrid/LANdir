@@ -102,7 +102,7 @@ class LANdirClient {
     final res = await req.close();
     if (res.statusCode == 404) {
       await res.drain();
-      throw ServerGoneException(url);
+      throw await _goneOrMissing(relPath, url);
     }
     if (res.statusCode != 200) {
       throw HttpException('listDir failed: ${res.statusCode}');
@@ -111,13 +111,37 @@ class LANdirClient {
     return _parseListing(body, url);
   }
 
+  /// A 404 on the ROOT listing means the base URL no longer maps to a
+  /// LANdir server -> [ServerGoneException]. A 404 on a SUBDIRECTORY listing
+  /// only means that folder is gone/rejected — but the root is re-checked
+  /// first, so a restarted server (new token, same address) is still
+  /// detected as gone rather than silently kept.
+  Future<HttpException> _goneOrMissing(String relPath, String url) async {
+    if (relPath.isEmpty) return ServerGoneException(url);
+    final rootReq = await _http.getUrl(Uri.parse(filesUrl));
+    final rootRes = await rootReq.close();
+    final gone = rootRes.statusCode == 404;
+    await rootRes.drain();
+    return gone
+        ? ServerGoneException(filesUrl)
+        : HttpException('folder not found (404): $url');
+  }
+
   Future<List<RemoteFile>> _listDirSealed(String relPath) async {
     final url = relPath.isEmpty ? _sfilesUrl : _slsUrl;
     final plaintext =
         relPath.isEmpty ? Uint8List(0) : Uint8List.fromList(utf8.encode(relPath));
     final result = await _sealedPost(url, plaintext);
     final (status, opened) = result;
-    if (status == 404) throw ServerGoneException(url);
+    if (status == 404) {
+      if (relPath.isEmpty) throw ServerGoneException(url);
+      // Subfolder 404: the server answered, so it exists — confirm with a
+      // sealed root listing before deciding the pin is stale (it can't be:
+      // the key is pinned, so a 200 root just means "folder missing").
+      final root = await _sealedPost(_sfilesUrl, Uint8List(0));
+      if (root.$1 == 404) throw ServerGoneException(_sfilesUrl);
+      throw HttpException('sealed listDir failed: folder not found (404)');
+    }
     if (status != 200 || opened == null) {
       throw HttpException('sealed listDir failed: $status');
     }

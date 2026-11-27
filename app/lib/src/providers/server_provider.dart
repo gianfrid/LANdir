@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:path_provider/path_provider.dart';
@@ -15,6 +16,7 @@ import '../core/file_sink.dart';
 import '../core/server.dart';
 import '../network_info.dart';
 import '../platform/documents_sink.dart';
+import '../platform/folder_picker.dart';
 import '../platform/hotspot.dart';
 import '../platform/media_store_sink.dart';
 
@@ -207,6 +209,61 @@ class ServerController extends _$ServerController {
     } catch (e) {
       state = state.copyWith(running: false, error: e.toString());
     }
+  }
+
+  /// Write files picked on this device straight into the running host's
+  /// sink (host-view "Add files"), bypassing HTTP but using the same
+  /// sanitization and collision handling as a remote upload — so a local
+  /// add lands in the same place (MediaStore Downloads on Android) with
+  /// the same naming rules. Fails as a batch-level no-op while stopped.
+  Future<LocalFilesResult> addLocalFiles(List<PlatformFile> files) async {
+    final server = _server;
+    if (!state.running || server == null) {
+      return const LocalFilesResult(0, ['server is not running']);
+    }
+    final local = <LocalFile>[];
+    final failures = <String>[];
+    for (final f in files) {
+      try {
+        // xFile works for SAF content:// picks too, where path may be null.
+        local.add(LocalFile(f.name, await f.xFile.readAsBytes()));
+      } catch (e) {
+        failures.add('${f.name}: $e');
+      }
+    }
+    final result =
+        await saveLocalFiles(server.sink, server.config.uploadDir, local);
+    return LocalFilesResult(result.ok, [...failures, ...result.failures]);
+  }
+
+  /// Pick a whole folder on this device and write every file in it into
+  /// the running host's sink, preserving the folder structure
+  /// ("sub/photo.jpg"). Same guard and sanitization as [addLocalFiles].
+  Future<LocalFilesResult> addLocalFolder(Uri treeUri) async {
+    final server = _server;
+    if (!state.running || server == null) {
+      return const LocalFilesResult(0, ['server is not running']);
+    }
+    final failures = <String>[];
+    final List<LocalPathFile> files;
+    try {
+      final entries = await listFolderTree(treeUri);
+      final list = <LocalPathFile>[];
+      for (final e in entries) {
+        try {
+          list.add(LocalPathFile(
+              e.relativePath, await readTreeFile(treeUri, e.relativePath)));
+        } catch (err) {
+          failures.add('${e.relativePath}: $err');
+        }
+      }
+      files = list;
+    } catch (e) {
+      return LocalFilesResult(0, ['folder unreadable: $e']);
+    }
+    final result =
+        await saveLocalPaths(server.sink, server.config.uploadDir, files);
+    return LocalFilesResult(result.ok, [...failures, ...result.failures]);
   }
 
   Future<void> stop() async {

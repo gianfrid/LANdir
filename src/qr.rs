@@ -1,6 +1,9 @@
 //! QR code generation for the startup URL: encode with the `qrcode` crate
-//! (byte mode, EC level M), render as ANSI half-blocks on a white background.
+//! (byte mode, EC level M), render as ANSI half-blocks.
 //!
+//! Rendered with no SGR escapes: modules use the terminal's default
+//! foreground on its default background, so the QR follows the terminal's
+//! theme (normal on light terminals, inverted on dark ones).
 //! Versions are capped at 6 (106 bytes), matching the Python implementation;
 //! longer URLs (e.g. secret mode with an IPv6 host) print "no QR code" instead.
 
@@ -23,17 +26,18 @@ pub fn qr_terminal(text: &str) -> Result<String, String> {
     Ok(render_ansi(&matrix, 4))
 }
 
-/// ANSI half-block rendering; dark modules on a white background.
+/// ANSI half-block rendering with no color codes — terminal default fg/bg.
 fn render_ansi(matrix: &[Vec<bool>], quiet: usize) -> String {
     let n = matrix.len();
     let w = n + 2 * quiet;
+    let prefix = "";
     let dark = |r: usize, c: usize| -> bool {
         r >= quiet && r - quiet < n && c >= quiet && c - quiet < n && matrix[r - quiet][c - quiet]
     };
     let mut lines = Vec::new();
     let mut r = 0;
     while r < w {
-        let mut line = String::from("\u{1b}[30;107m");
+        let mut line = String::from(prefix);
         for c in 0..w {
             let top = dark(r, c);
             let bottom = dark(r + 1, c);
@@ -47,7 +51,7 @@ fn render_ansi(matrix: &[Vec<bool>], quiet: usize) -> String {
                 ' '
             });
         }
-        line.push_str("\u{1b}[0m");
+        line.push_str("");
         lines.push(line);
         r += 2;
     }
@@ -62,9 +66,31 @@ mod tests {
     fn encodes_url_within_version_cap() {
         let url = "http://192.168.1.10:8000/";
         let out = qr_terminal(url).unwrap();
-        assert!(out.contains("\u{1b}[30;107m"));
+        // No color codes at all: modules inherit the terminal's fg/bg
+        assert!(!out.contains('\u{1b}'));
         // deterministic
         assert_eq!(out, qr_terminal(url).unwrap());
+    }
+
+    #[test]
+    fn render_ansi_emits_half_blocks_no_colors() {
+        // 4x4 all-dark matrix with quiet zone → full block '█' in the middle
+        let matrix = vec![vec![true; 4]; 4];
+        let out = render_ansi(&matrix, 1);
+        assert!(!out.contains('\u{1b}'));
+        assert!(out.contains('█'));
+    }
+
+    #[test]
+    fn render_ansi_quiet_zone_is_blank() {
+        // quiet zone rows/cols must be spaces (the background color shows through)
+        let matrix = vec![vec![true; 2]; 2];
+        let out = render_ansi(&matrix, 2);
+        let bare: Vec<String> = out.lines().map(|l| l.to_string()).collect();
+        // first line is all quiet zone → all spaces
+        assert!(bare[0].chars().all(|c| c == ' '));
+        // last line is all quiet zone → all spaces
+        assert!(bare.last().unwrap().chars().all(|c| c == ' '));
     }
 
     #[test]

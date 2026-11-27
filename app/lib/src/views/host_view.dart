@@ -36,6 +36,44 @@ class _HostViewState extends ConsumerState<HostView> {
     ref.read(serverControllerProvider.notifier).setSaveDir(path);
   }
 
+  /// Pick files on this device and write them into the running host's own
+  /// sink (lands in Downloads on Android), like a remote upload would.
+  Future<void> _pickAndAddFiles(WidgetRef ref) async {
+    final files = await FilePicker.pickFiles();
+    if (files.isEmpty) return;
+    final added = await ref
+        .read(serverControllerProvider.notifier)
+        .addLocalFiles(files);
+    if (!mounted) return;
+    final total = files.length;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(added.allOk
+            ? 'Added ${added.ok} file(s)'
+            : 'Added ${added.ok} of $total file(s) '
+                '(${added.failures.join('; ')})'),
+      ),
+    );
+  }
+
+  /// Pick a folder on this device and write every file in it into the
+  /// running host, keeping the folder structure.
+  Future<void> _pickAndAddFolder(WidgetRef ref) async {
+    final uri = await FilePicker.pickDirectory();
+    if (uri == null) return;
+    final added =
+        await ref.read(serverControllerProvider.notifier).addLocalFolder(uri);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(added.allOk
+            ? 'Added ${added.ok} file(s) from folder'
+            : 'Added ${added.ok} file(s), ${added.failures.length} failed '
+                '(${added.failures.join('; ')})'),
+      ),
+    );
+  }
+
   /// Copy the advertised URL so it can be pasted into a browser on
   /// another device (the QR code is not always scannable).
   Future<void> _copyUrl(String url) async {
@@ -244,6 +282,26 @@ class _HostViewState extends ConsumerState<HostView> {
         Text('Port ${state.port} • ${state.insecure ? 'insecure' : 'secret'} mode',
             style: const TextStyle(color: Colors.grey)),
         const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () => _pickAndAddFiles(ref),
+                icon: const Icon(Icons.add),
+                label: const Text('Add files'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () => _pickAndAddFolder(ref),
+                icon: const Icon(Icons.create_new_folder),
+                label: const Text('Add folder'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: () =>
               ref.read(serverControllerProvider.notifier).stop(),
