@@ -106,7 +106,7 @@
       "licenseConcluded": "MIT OR Apache-2.0",
       "licenseDeclared": "MIT OR Apache-2.0",
       "name": "clap_derive",
-      "versionInfo": "4.6.7"
+      "versionInfo": "4.6.8"
     },
     {
       "SPDXID": "SPDXRef-Package-tokio-util-0.7.20",
@@ -1128,7 +1128,7 @@
       "licenseConcluded": "MIT OR Apache-2.0",
       "licenseDeclared": "MIT OR Apache-2.0",
       "name": "clap",
-      "versionInfo": "4.6.7"
+      "versionInfo": "4.6.8"
     },
     {
       "SPDXID": "SPDXRef-Package-ryu-1.0.23",
