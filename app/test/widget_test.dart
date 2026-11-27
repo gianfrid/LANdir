@@ -200,4 +200,18 @@ void main() {
     expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
     expect(find.text('Downloads'), findsOneWidget);
   });
+
+  testWidgets('app uses ThemeMode.system and defines both light and dark themes',
+      (tester) async {
+    usePhoneViewport(tester);
+    await tester.pumpWidget(const ProviderScope(child: LANdirApp()));
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(materialApp.themeMode, ThemeMode.system);
+    expect(materialApp.theme, isNotNull);
+    expect(materialApp.darkTheme, isNotNull);
+    // Light theme should not be dark, dark theme should be dark.
+    expect(materialApp.theme!.colorScheme.brightness, Brightness.light);
+    expect(materialApp.darkTheme!.colorScheme.brightness, Brightness.dark);
+  });
 }

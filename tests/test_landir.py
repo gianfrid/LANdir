@@ -281,11 +281,27 @@ class QRTests(unittest.TestCase):
         for line in lines:
             bare = re.sub(r"\x1b\[[0-9;]*m", "", line)
             self.assertEqual(len(bare), w)
-            self.assertTrue(line.startswith("\x1b[30;107m"))
-            self.assertTrue(line.endswith("\x1b[0m"))
+            # no color codes at all: modules inherit the terminal's fg/bg
+            self.assertNotIn("\x1b", line)
         self.assertEqual(set(re.sub(r"\x1b\[[0-9;]*m", "", lines[0])), {" "})
         self.assertEqual(set(re.sub(r"\x1b\[[0-9;]*m", "", lines[-1])), {" "})
         self.assertIn("▀", out)  # actually renders QR modules
+
+    def test_qr_terminal_no_color_codes(self):
+        """Output contains no ANSI escapes: modules render in the terminal's
+        default fg on its default bg, readable in light and dark terminals."""
+        m = self.fds.qr_matrix("http://10.0.0.1:8000/")
+        out = self.fds.qr_terminal(m)
+        self.assertNotIn("\x1b", out)
+        self.assertIn("▀", out)
+
+    def test_qr_terminal_quiet_zone_blank(self):
+        """First and last rendered lines are pure quiet zone (spaces)."""
+        m = self.fds.qr_matrix("hi")
+        out = self.fds.qr_terminal(m, quiet=2)
+        bare = [re.sub(r"\x1b\[[0-9;]*m", "", l) for l in out.split("\n")]
+        self.assertTrue(all(c == " " for c in bare[0]))
+        self.assertTrue(all(c == " " for c in bare[-1]))
 
     def test_decodes_with_every_mask_valid(self):
         # build with each of the 8 masks and check the decoder recovers it
@@ -304,6 +320,46 @@ class QRTests(unittest.TestCase):
                 out, read_mask = decode_qr(grid)
                 self.assertEqual(out, text)
                 self.assertEqual(read_mask, mask)
+
+
+class _FakeCurses:
+    """Just enough of the curses module to exercise the default-colors init."""
+
+    class error(Exception):
+        pass
+
+    def __init__(self, supported=True):
+        self.supported = supported
+        self.use_default_colors_calls = 0
+
+    def use_default_colors(self):
+        if not self.supported:
+            raise self.error("use_default_colors not supported")
+        self.use_default_colors_calls += 1
+
+
+class CursesDefaultColorsTests(unittest.TestCase):
+    """The curses UI must drop ncurses' white-on-black screen assumption.
+
+    On a color-capable terminal ncurses initializes the screen with explicit
+    SGR 37/40 (white on black) and erases with it, whatever the user's actual
+    theme — so a light terminal gets a dark UI and an inverted QR. The fix is
+    use_default_colors(), which makes pair 0 mean "terminal defaults".
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fds = load_server()
+
+    def test_drops_white_on_black_assumption(self):
+        fake = _FakeCurses(supported=True)
+        self.assertTrue(self.fds._use_terminal_default_colors(fake))
+        self.assertEqual(fake.use_default_colors_calls, 1)
+
+    def test_tolerates_missing_extension(self):
+        # some curses builds lack the extension; the UI must still start
+        fake = _FakeCurses(supported=False)
+        self.assertFalse(self.fds._use_terminal_default_colors(fake))
 
 
 class SafeNameTests(unittest.TestCase):
@@ -703,7 +759,7 @@ class StartupSmokeTest(unittest.TestCase):
                     # stop once the QR (rendered after the Open URL line)
                     # is fully printed or explicitly skipped
                     if ("(no QR" in line.decode()
-                            or ("▀" in text and len(out) > 2000)):
+                            or "▀" in text):
                         break
                 text = out.decode()
                 self.assertIn("▀", text)  # QR rendered

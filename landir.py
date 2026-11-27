@@ -422,9 +422,15 @@ def qr_matrix(text: str):
 
 
 def qr_terminal(matrix, quiet=4):
-    """ANSI half-block rendering; dark modules on a white background."""
+    """ANSI half-block rendering (▀/▄/█) with no SGR escapes at all, so
+    modules inherit the terminal's default fg/bg and the QR follows its
+    theme: normal on light terminals, inverted on dark ones. The curses
+    UI additionally needs _use_terminal_default_colors(), since ncurses
+    would otherwise paint its own screen "white on black" (see there).
+    """
     n = len(matrix)
     w = n + 2 * quiet
+    prefix = ""
 
     def dark(r, c):
         return 0 <= r - quiet < n and 0 <= c - quiet < n and matrix[r - quiet][c - quiet]
@@ -436,7 +442,7 @@ def qr_terminal(matrix, quiet=4):
             top, bottom = dark(r, c), dark(r + 1, c)
             chunks.append("█" if top and bottom else "▀" if top
                           else "▄" if bottom else " ")
-        lines.append("\x1b[30;107m" + "".join(chunks) + "\x1b[0m")
+        lines.append("".join(chunks))
     return "\n".join(lines)
 
 
@@ -1009,11 +1015,28 @@ def _curses_available():
         return False
 
 
-def _safe_add(win, y, x, text):
+def _use_terminal_default_colors(curses):
+    """Drop ncurses' built-in white-on-black screen assumption.
+
+    On any color-capable TERM, ncurses initializes stdscr with explicit
+    SGR 37/40 (white on black) and erases the screen with that background,
+    whatever the user's actual theme — so a light terminal gets a dark UI
+    with an inverted QR. use_default_colors() makes pair 0 and the screen
+    background mean "terminal defaults" instead. Not every curses build
+    has the extension; return False there so the UI still starts.
+    """
+    try:
+        curses.use_default_colors()
+        return True
+    except curses.error:
+        return False
+
+
+def _safe_add(win, y, x, text, attr=0):
     """addnstr that never raises on the bottom-right cell / tiny terminals."""
     import curses
     try:
-        win.addnstr(y, x, text, max(0, win.getmaxyx()[1] - x - 1))
+        win.addnstr(y, x, text, max(0, win.getmaxyx()[1] - x - 1), attr)
     except curses.error:
         pass
 
@@ -1022,6 +1045,7 @@ def _ui_loop(stdscr, url):
     """Full-screen UI: QR + online clients on top, scrollable event log below.
     'q' toggles the QR panel, arrows/PgUp/PgDn scroll the log, Ctrl+C quits."""
     import curses
+    _use_terminal_default_colors(curses)
     curs_set_ok = True
     try:
         curses.curs_set(0)
@@ -1030,10 +1054,8 @@ def _ui_loop(stdscr, url):
     stdscr.nodelay(True)
     show_qr = True
     scroll = 0  # how many lines the log is scrolled up from the bottom
-    # qr_terminal emits ANSI color escapes; curses would print them literally
-    ansi = re.compile(r"\x1b\[[0-9;]*m")
-    qr_lines = [ansi.sub("", l)
-                for l in qr_terminal(qr_matrix(url)).splitlines()]
+    qr_lines = qr_terminal(qr_matrix(url)).splitlines()
+    qr_attr = 0  # pair 0 = terminal defaults after use_default_colors()
     while True:
         key = stdscr.getch()
         if key == ord("q"):
@@ -1061,7 +1083,7 @@ def _ui_loop(stdscr, url):
             for ql in qr_lines:
                 if line >= top_h - 1:
                     break
-                _safe_add(top, line, 0, ql)
+                _safe_add(top, line, 0, ql, qr_attr)
                 line += 1
         online = ACTIVITY.online()
         _safe_add(top, top_h - 1, 0,
