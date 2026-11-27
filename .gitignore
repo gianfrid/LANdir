@@ -2,6 +2,7 @@ uploads
 __pycache__/
 /target
 .agents/
+.juggler/
 scripts/watch-apk.log
 scripts/.watch-apk-state
 /landir-*.AppImage
