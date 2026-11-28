@@ -81,6 +81,15 @@ void main() {
     // sealed exchange fails — surfaced as SealedExchangeException so
     // callers drop the stale pin instead of keeping a dead host.
     expect(() => evil.listDir(''), throwsA(isA<SealedExchangeException>()));
+    // The same stale pin must not survive on the transfer paths either:
+    // a failed sealed upload/download re-checks the pin with a sealed root
+    // listing and fails the same way — never a plaintext fallback.
+    expect(
+        () => evil.uploadFile(
+            'x.txt', Uint8List.fromList(utf8.encode('x'))),
+        throwsA(isA<SealedExchangeException>()));
+    expect(() => evil.downloadFile('report.txt'),
+        throwsA(isA<SealedExchangeException>()));
   });
 
   test('sealed listing of a missing folder is a plain error, not gone',
@@ -93,6 +102,44 @@ void main() {
         throwsA(predicate((e) =>
             e is HttpException && e is! SealedExchangeException &&
             e.message.contains('folder not found'))));
+  });
+
+  test('sealed download of a missing file is a plain error, not a drop',
+      () async {
+    // The host opened our envelope and answered a path-level 404: only the
+    // file is missing, the pin still works — no exception that drops it.
+    await expectLater(
+        client.downloadFile('missing.txt'),
+        throwsA(predicate((e) =>
+            e is HttpException &&
+            e is! SealedExchangeException &&
+            e is! ServerGoneException &&
+            e.message.contains('file not found'))));
+  });
+
+  test('sealed upload rejected over the size limit is a plain rejection',
+      () async {
+    final limited = LANdirServer(
+      ServerConfig(
+          port: 0,
+          uploadDir: tmpDir,
+          insecure: true,
+          encrypted: true,
+          maxUploadBytes: 8),
+      DirectoryFileSink(tmpDir),
+      hostKey: hostKey,
+    );
+    await limited.start();
+    addTearDown(() => limited.stop());
+    final c = LANdirClient('http://127.0.0.1:${limited.boundPort}/',
+        hostKey: hostKey.publicKey);
+    addTearDown(c.close);
+    // 413 with a working pin: the follow-up root listing confirms the pin
+    // is alive, so this is a plain rejection (false), not a drop-triggering
+    // SealedExchangeException.
+    final ok = await c.uploadFile(
+        'big.txt', Uint8List.fromList(List.filled(64, 0x41)));
+    expect(ok, isFalse);
   });
 
   test('keyless client against keyless host still works (plaintext mode)',

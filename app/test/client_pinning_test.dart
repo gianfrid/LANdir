@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -262,5 +263,168 @@ void main() {
     expect(state.servers.map((s) => s.baseUrl), contains(entry.baseUrl));
     expect(state.current?.baseUrl, entry.baseUrl);
     expect(state.removedServerUrl, isNull);
+  });
+
+  // The mid-session re-key: the pin worked when the host was selected, then
+  // the host restarted with a NEW key on the same port. The next sealed
+  // exchange can no longer authenticate, so the host must be dropped.
+  Future<SavedServer> selectPinnedThenRekey() async {
+    final serverA = LANdirServer(
+      ServerConfig(
+          port: 0, uploadDir: tmpDir, insecure: true, encrypted: true),
+      DirectoryFileSink(tmpDir),
+      hostKey: hostKey,
+    );
+    await serverA.start();
+    controller.addServer(
+        'http://127.0.0.1:${serverA.boundPort}/${keyFragment()}');
+    final entry = stateOf(container).servers.single;
+    await controller.selectServer(entry);
+    expect(stateOf(container).current?.baseUrl, entry.baseUrl);
+
+    final keyDir2 = Directory.systemTemp.createTempSync('landir_rekey_');
+    addTearDown(() => keyDir2.deleteSync(recursive: true));
+    final key2 = await HostKeyStore(keyDir2.path).loadOrCreate();
+    final port = serverA.boundPort;
+    await serverA.stop();
+    // Re-bind the SAME port for the restarted host. The bind can lose a
+    // race with the old listener's teardown — the server then silently
+    // falls back to a random port, which the client's pinned URL would
+    // never reach — so retry until the port really matches.
+    late final LANdirServer serverB;
+    var attempts = 0;
+    while (true) {
+      final candidate = LANdirServer(
+        ServerConfig(
+            port: port, uploadDir: tmpDir, insecure: true, encrypted: true),
+        DirectoryFileSink(tmpDir),
+        hostKey: key2,
+      );
+      await candidate.start();
+      if (candidate.boundPort == port) {
+        serverB = candidate;
+        break;
+      }
+      await candidate.stop();
+      if (++attempts > 25) {
+        fail('could not re-bind port $port for the re-keyed host');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    addTearDown(() => serverB.stop());
+    return entry;
+  }
+
+  test('a host that re-keys mid-session is dropped on upload', () async {
+    final entry = await selectPinnedThenRekey();
+
+    // The first request dies on the stale keep-alive socket to the old
+    // process: a transient transport error, so the host stays registered.
+    final first = await controller.uploadFile(
+        'x.txt', Uint8List.fromList(utf8.encode('x')));
+    expect(first, isFalse);
+    var midState = stateOf(container);
+    expect(midState.error, contains('Upload error'));
+    expect(
+        midState.servers.map((s) => s.baseUrl), contains(entry.baseUrl));
+
+    // The retry reaches the re-keyed host: the sealed upload cannot
+    // authenticate, the pin re-check confirms it is stale, and the host
+    // is dropped.
+    final second = await controller.uploadFile(
+        'x.txt', Uint8List.fromList(utf8.encode('x')));
+    expect(second, isFalse);
+    final state = stateOf(container);
+    expect(state.servers, isEmpty);
+    expect(state.current, isNull);
+    expect(state.removedServerUrl, entry.baseUrl);
+    expect(state.removedServerReason, contains('pinned key'));
+    expect(state.error, contains('pinned key'));
+  });
+
+  test('a host that re-keys mid-session is dropped on download', () async {
+    final entry = await selectPinnedThenRekey();
+
+    // As above: the first request is a transient stale-socket error...
+    final first = await controller.downloadFile('whatever.txt');
+    expect(first, isNull);
+    var midState = stateOf(container);
+    expect(midState.error, contains('Download error'));
+    expect(
+        midState.servers.map((s) => s.baseUrl), contains(entry.baseUrl));
+
+    // ...and the retry confirms the stale pin and drops the host.
+    final second = await controller.downloadFile('whatever.txt');
+    expect(second, isNull);
+    final state = stateOf(container);
+    expect(state.servers, isEmpty);
+    expect(state.current, isNull);
+    expect(state.removedServerUrl, entry.baseUrl);
+    expect(state.removedServerReason, contains('pinned key'));
+  });
+
+  test('a rejected sealed upload keeps the host registered', () async {
+    final server = LANdirServer(
+      ServerConfig(
+          port: 0,
+          uploadDir: tmpDir,
+          insecure: true,
+          encrypted: true,
+          maxUploadBytes: 8),
+      DirectoryFileSink(tmpDir),
+      hostKey: hostKey,
+    );
+    await server.start();
+    addTearDown(() => server.stop());
+
+    controller.addServer(
+        'http://127.0.0.1:${server.boundPort}/${keyFragment()}');
+    final entry = stateOf(container).servers.single;
+    await controller.selectServer(entry);
+
+    // 413 over the size limit: the pin is confirmed alive by the sealed
+    // root listing, so this is a plain rejection — not a stale-pin drop.
+    final ok = await controller.uploadFile(
+        'big.txt', Uint8List.fromList(List.filled(64, 0x41)));
+    expect(ok, isFalse);
+    final state = stateOf(container);
+    expect(state.error, contains('Upload failed'));
+    expect(state.servers.map((s) => s.baseUrl), contains(entry.baseUrl));
+    expect(state.current?.baseUrl, entry.baseUrl);
+    expect(state.removedServerUrl, isNull);
+  });
+
+  test('a sealed download of a missing file keeps the host registered',
+      () async {
+    File('$tmpDir/secret.txt').writeAsStringSync('s3cret');
+    final server = LANdirServer(
+      ServerConfig(
+          port: 0, uploadDir: tmpDir, insecure: true, encrypted: true),
+      DirectoryFileSink(tmpDir),
+      hostKey: hostKey,
+    );
+    await server.start();
+    addTearDown(() => server.stop());
+
+    controller.addServer(
+        'http://127.0.0.1:${server.boundPort}/${keyFragment()}');
+    final entry = stateOf(container).servers.single;
+    await controller.selectServer(entry);
+
+    // The file is missing, but the host opened our envelope and answered
+    // a path-level 404: the pin works, the host stays.
+    final bytes = await controller.downloadFile('missing.txt');
+    expect(bytes, isNull);
+    final state = stateOf(container);
+    expect(state.error, contains('Download error'));
+    expect(state.error, contains('file not found'));
+    expect(state.servers.map((s) => s.baseUrl), contains(entry.baseUrl));
+    expect(state.current?.baseUrl, entry.baseUrl);
+    expect(state.removedServerUrl, isNull);
+
+    // And it still works afterwards.
+    await controller.refresh();
+    expect(stateOf(container).files.any((f) => f.name == 'secret.txt'),
+        isTrue);
   });
 }

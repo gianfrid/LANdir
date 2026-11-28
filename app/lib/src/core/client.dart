@@ -163,6 +163,27 @@ class LANdirClient {
     return _parseListing(utf8.decode(opened), url);
   }
 
+  /// After an ambiguous sealed failure on upload/download, re-check whether
+  /// the pinned key can still talk to this host at all, with a sealed ROOT
+  /// listing (the same confirmation [listDir] uses for a subfolder 404):
+  ///
+  /// - root listing completes -> the pin works; the earlier failure was
+  ///   about the transfer itself, so return normally and the caller keeps
+  ///   the host;
+  /// - root 404 -> the sealed endpoints are gone (host left encryption
+  ///   mode, or the address no longer maps to it): [ServerGoneException];
+  /// - root fails the same way -> the pin is stale (host re-keyed):
+  ///   [SealedExchangeException]. Both drop the host in the provider.
+  ///
+  /// A connection error here propagates as a plain transport error, so a
+  /// host that simply died stays registered (transient).
+  Future<void> _confirmPinUsable() async {
+    final (status, opened) = await _sealedPost(_sfilesUrl, Uint8List(0));
+    if (status == 200 && opened != null) return;
+    if (status == 404) throw ServerGoneException(_sfilesUrl);
+    throw SealedExchangeException(_sfilesUrl, status);
+  }
+
   List<RemoteFile> _parseListing(String body, String url) {
     final list = jsonDecode(body) as List<dynamic>;
     return list
@@ -196,7 +217,14 @@ class LANdirClient {
     inner[boundary.length + 1] = 0x0a;
     inner.setRange(boundary.length + 2, inner.length, body);
     final (status, opened) = await _sealedPost(_suploadUrl, inner);
-    return status == 200 && opened != null;
+    if (status == 200 && opened != null) return true;
+    // Any failure here is ambiguous: the host rejected the transfer (413
+    // over the size limit, 400 malformed/rejected multipart) OR our
+    // envelope no longer opens there (wrong key / sealed endpoints gone).
+    // [_confirmPinUsable] settles it: stale pin -> exception (host is
+    // dropped), healthy pin -> plain rejection (host is kept).
+    await _confirmPinUsable();
+    return false;
   }
 
   /// Download a file. Returns the raw bytes.
@@ -216,10 +244,19 @@ class LANdirClient {
   Future<Uint8List> _downloadFileSealed(String name) async {
     final result = await _sealedPost(_sflUrl, Uint8List.fromList(utf8.encode(name)));
     final (status, opened) = result;
-    if (status != 200 || opened == null) {
-      throw HttpException('sealed download failed: $status');
+    if (status == 200 && opened != null) return opened;
+    if (status == 404) {
+      // The host opened our envelope and answered a path-level 404: only
+      // the file is missing, the pin works — plain error, host is kept.
+      throw HttpException('sealed download failed: file not found (404)');
     }
-    return opened;
+    // Ambiguous (envelope rejected, response not authenticated, server
+    // error): confirm the pin — stale pin -> exception (host dropped),
+    // healthy pin -> plain error (host kept).
+    await _confirmPinUsable();
+    throw HttpException(status == 200
+        ? 'sealed download failed: response did not authenticate'
+        : 'sealed download failed: $status');
   }
 
   Future<Uint8List> _readAll(HttpClientResponse res) async {

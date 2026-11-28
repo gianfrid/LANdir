@@ -329,15 +329,10 @@ class ClientController extends _$ClientController {
       final files = await _client!.listDir('');
       state = state.copyWith(files: files, loading: false);
     } on ServerGoneException {
-      _forgetServer(server,
-          'Server ${server.name} no longer exists (404) — removed from '
-          'your server list.');
+      _forgetGone(server);
       return;
     } on SealedExchangeException catch (e) {
-      _forgetServer(server,
-          'Server ${server.name} no longer accepts this app\'s pinned key '
-          '($e) — removed from your server list. Re-scan its QR code to '
-          'pair again.');
+      _forgetSealed(server, e);
       return;
     } catch (e) {
       state = state.copyWith(
@@ -411,21 +406,16 @@ class ClientController extends _$ClientController {
       final files = await client.listDir(state.currentPath);
       state = state.copyWith(files: files, loading: false);
     } on ServerGoneException {
-      _forgetServer(current,
-          'Server ${current.name} no longer exists (404) — removed from '
-          'your server list.');
+      _forgetGone(current);
     } on SealedExchangeException catch (e) {
-      _forgetServer(current,
-          'Server ${current.name} no longer accepts this app\'s pinned key '
-          '($e) — removed from your server list. Re-scan its QR code to '
-          'pair again.');
+      _forgetSealed(current, e);
     } catch (e) {
       state = state.copyWith(loading: false, error: 'Refresh failed: $e');
     }
   }
 
   /// The server can never answer this client again — it answered 404 (base
-  /// URL no longer maps to a LANdir server) or the sealed listing no longer
+  /// URL no longer maps to a LANdir server) or the sealed exchange no longer
   /// authenticates under the pinned key (host re-keyed, pin stale). Drop it
   /// from the registry and deselect it. [reason] is the user-facing
   /// sentence recorded in [ClientState.error] and shown by the client view.
@@ -438,6 +428,24 @@ class ClientController extends _$ClientController {
       removedUrl: server.baseUrl,
       removedReason: reason,
     );
+  }
+
+  /// "Server gone" drop: the base URL answered 404, so no LANdir server
+  /// (sealed endpoints included) maps to it anymore.
+  void _forgetGone(SavedServer server) {
+    _forgetServer(server,
+        'Server ${server.name} no longer exists (404) — removed from '
+        'your server list.');
+  }
+
+  /// Stale-pin drop: the host still answers, but no sealed exchange
+  /// completes under the pinned key (it re-keyed or was reinstalled). This
+  /// fires on listing, upload, and download alike.
+  void _forgetSealed(SavedServer server, Object e) {
+    _forgetServer(server,
+        'Server ${server.name} no longer accepts this app\'s pinned key '
+        '($e) — removed from your server list. Re-scan its QR code to '
+        'pair again.');
   }
 
   /// Remove [baseUrl] from the registry, deselect it if it is current, and
@@ -489,6 +497,10 @@ class ClientController extends _$ClientController {
   }
 
   /// Upload a file to the current server. Returns true on success.
+  ///
+  /// A failed sealed upload whose pin turns out stale drops the host (the
+  /// same wrong-key rule as listings); a plain rejection — e.g. over the
+  /// host's size limit — keeps it.
   Future<bool> uploadFile(String filename, Uint8List content) async {
     final client = _client;
     final current = state.current;
@@ -506,6 +518,12 @@ class ClientController extends _$ClientController {
             loading: false, error: 'Upload failed (server returned error)');
       }
       return ok;
+    } on ServerGoneException {
+      _forgetGone(current);
+      return false;
+    } on SealedExchangeException catch (e) {
+      _forgetSealed(current, e);
+      return false;
     } catch (e) {
       state = state.copyWith(loading: false, error: 'Upload error: $e');
       return false;
@@ -514,10 +532,12 @@ class ClientController extends _$ClientController {
 
   /// Download a file from the current server by its path relative to the
   /// server root (e.g. 'flutter-apk/app.apk' when inside a folder).
-  /// Returns the bytes.
+  /// Returns the bytes. A missing file is a plain error (the host stays
+  /// registered); a stale pin discovered mid-download drops the host.
   Future<Uint8List?> downloadFile(String relPath) async {
     final client = _client;
-    if (client == null) return null;
+    final current = state.current;
+    if (client == null || current == null) return null;
     final name = relPath.split('/').last;
     state = state.copyWith(
         loading: true, error: null, statusMessage: 'Downloading $name...');
@@ -526,6 +546,12 @@ class ClientController extends _$ClientController {
       state = state.copyWith(
           loading: false, statusMessage: 'Downloaded $name');
       return bytes;
+    } on ServerGoneException {
+      _forgetGone(current);
+      return null;
+    } on SealedExchangeException catch (e) {
+      _forgetSealed(current, e);
+      return null;
     } catch (e) {
       state = state.copyWith(loading: false, error: 'Download error: $e');
       return null;
