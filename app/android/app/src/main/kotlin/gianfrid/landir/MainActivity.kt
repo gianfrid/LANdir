@@ -292,15 +292,17 @@ class MainActivity : FlutterActivity() {
         val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val (rel, display) = mediaStorePathFor(name)
         if (overwrite) {
-            // Replace the existing row in place: inserting a duplicate
-            // DISPLAY_NAME would make MediaStore auto-rename it.
+            // Replace = delete the existing row(s), then fall through to the
+            // insert below. Writing in place with openOutputStream(uri, "w")
+            // is NOT reliable here: for media URIs "w" may not truncate
+            // (documented ContentResolver behavior), so a shorter new file
+            // would keep the old file's tail bytes -> corrupt file.
             val projection = arrayOf(MediaStore.Downloads._ID)
             val (selection, args) = selectionFor(name)
             resolver.query(collection, projection, selection, args, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
+                while (cursor.moveToNext()) {
                     val uri = android.content.ContentUris.withAppendedId(collection, cursor.getLong(0))
-                    resolver.openOutputStream(uri, "w")!!.use { it.write(bytes) }
-                    return uri.toString()
+                    resolver.delete(uri, null, null)
                 }
             }
         }
