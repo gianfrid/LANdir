@@ -414,6 +414,21 @@ class SafeNameTests(unittest.TestCase):
         self.assertNotEqual(name, "exists.txt")  # won't overwrite the original
         self.assertTrue(os.path.exists(orig))
 
+    def test_taken_timestamp_suffix_gets_unique_name(self):
+        # two same-name uploads within the same second must not collide:
+        # occupy both the plain name and the first timestamped candidate
+        open(os.path.join(self.tmp.name, "exists.txt"), "w").close()
+        first = self.fds.safe_name("exists.txt")
+        open(os.path.join(self.tmp.name, first), "w").close()
+        second = self.fds.safe_name("exists.txt")
+        self.assertNotEqual(first, second)
+        self.assertTrue(second.startswith("exists_"))
+        self.assertTrue(second.endswith(".txt"))
+        # the returned name must be free, and the earlier files untouched
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, second)))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "exists.txt")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, first)))
+
     def test_download_lookup(self):
         good = os.path.join(self.tmp.name, "good file (1) [x].txt")
         open(good, "w").close()
@@ -544,6 +559,16 @@ class PlainServerTests(ServerTestBase):
         self.upload_ok("/upload", "hello.txt", b"hello world")
         self.assertIn("hello.txt", self.saved_files())
         self.assertEqual(self.read_saved("hello.txt"), b"hello world")
+
+    def test_upload_same_name_twice_keeps_both(self):
+        # rapid re-upload of the same name (same second) must not overwrite
+        # or lose either version
+        self.upload_ok("/upload", "doc.bin", b"version-1")
+        self.upload_ok("/upload", "doc.bin", b"version-2")
+        files = [f for f in self.saved_files() if f.startswith("doc")]
+        self.assertEqual(len(files), 2)
+        contents = sorted(self.read_saved(f) for f in files)
+        self.assertEqual(contents, [b"version-1", b"version-2"])
 
     def test_upload_traversal_lands_inside(self):
         self.upload_ok("/upload", "../../pwn", b"pwned")

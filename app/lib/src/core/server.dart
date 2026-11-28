@@ -66,6 +66,35 @@ class LocalFilesResult {
   bool get allOk => failures.isEmpty;
 }
 
+/// Minimal async mutex. All sink writes in this isolate (HTTP uploads and
+/// local "add files") go through [_saveLock] so that "pick a free name, then
+/// write" is atomic: sink.write truncates, so two concurrent same-name
+/// writes would otherwise interleave and corrupt the file (SPEC.md rule 4).
+class _AsyncLock {
+  Future<void> _tail = Future.value();
+  Future<T> synchronized<T>(Future<T> Function() fn) {
+    final next = _tail.then((_) => fn());
+    _tail = next.then((_) => null, onError: (_) => null);
+    return next;
+  }
+}
+
+final _saveLock = _AsyncLock();
+
+/// Claim a name that does not exist in [sink] yet and write [bytes] under
+/// it, never overwriting. Returns the name used.
+Future<String> _writeUnique(FileSink sink, String base, Stream<List<int>> bytes) {
+  return _saveLock.synchronized(() async {
+    var name = base;
+    var n = 1;
+    while (await sink.exists(name)) {
+      name = numberedName(base, n++);
+    }
+    await sink.write(name, bytes);
+    return name;
+  });
+}
+
 /// Write [files] through [sink] exactly like an HTTP upload would:
 /// safeName() first, then sink-level collision renaming ("stem (N).ext")
 /// for storages (MediaStore) whose existing files safeName can't see.
@@ -75,12 +104,7 @@ Future<LocalFilesResult> saveLocalFiles(
   final failures = <String>[];
   for (final f in files) {
     try {
-      var name = safeName(f.name, uploadDir);
-      var n = 1;
-      while (await sink.exists(name)) {
-        name = numberedName(safeName(f.name, uploadDir), n++);
-      }
-      await sink.write(name, Stream.value(f.bytes));
+      await _writeUnique(sink, safeName(f.name, uploadDir), Stream.value(f.bytes));
       ok++;
     } catch (e) {
       failures.add('${f.name}: $e');
@@ -112,12 +136,7 @@ Future<LocalFilesResult> saveLocalPaths(
         failures.add('${f.path}: rejected');
         continue;
       }
-      var rel = cleaned;
-      var n = 1;
-      while (await sink.exists(rel)) {
-        rel = numberedName(rel, n++);
-      }
-      await sink.write(rel, Stream.value(f.bytes));
+      await _writeUnique(sink, cleaned, Stream.value(f.bytes));
       ok++;
     } catch (e) {
       failures.add('${f.path}: $e');
@@ -320,17 +339,15 @@ class LANdirServer {
     var saved = 0;
     for (final f in files) {
       try {
-        var name = safeName(f.filename, config.uploadDir);
         // Sink-level collision check: on Android the real storage is
         // MediaStore, not uploadDir, so safeName's filesystem check can't
         // see existing files there. Rename ourselves as "stem (N).ext"
         // (extension preserved) instead of letting the OS produce
-        // "name.ext (N)".
-        var n = 1;
-        while (await sink.exists(name)) {
-          name = numberedName(safeName(f.filename, config.uploadDir), n++);
-        }
-        await sink.write(name, Stream.value(f.bytes));
+        // "name.ext (N)". _writeUnique holds _saveLock across the exists
+        // check and the write so concurrent same-name uploads can never
+        // truncate each other's file.
+        await _writeUnique(
+            sink, safeName(f.filename, config.uploadDir), Stream.value(f.bytes));
         saved++;
       } catch (_) {
         continue;

@@ -741,12 +741,40 @@ def safe_name(name: str) -> str:
     path = os.path.realpath(os.path.join(UPLOAD_DIR, name))
     if os.path.commonpath([path, os.path.realpath(UPLOAD_DIR)]) != os.path.realpath(UPLOAD_DIR):
         raise ValueError("path escapes upload directory")
-    # Avoid overwriting: add a timestamp if the file exists
+    # Avoid overwriting: if the name exists, add a timestamp suffix and keep
+    # bumping a counter until the candidate does not exist yet (the timestamp
+    # alone has 1-second resolution, so it can collide on rapid re-uploads).
     if os.path.exists(path):
         stem, ext = os.path.splitext(name)
-        path = os.path.join(UPLOAD_DIR,
-                            f"{stem}_{datetime.now():%Y%m%d_%H%M%S}{ext}")
+        ts = f"{datetime.now():%Y%m%d_%H%M%S}"
+        candidate = f"{stem}_{ts}{ext}"
+        n = 1
+        while os.path.exists(os.path.join(UPLOAD_DIR, candidate)):
+            n += 1
+            candidate = f"{stem}_{ts}_{n}{ext}"
+        return candidate
     return os.path.basename(path)
+
+
+def save_unique(name: str, data: bytes):
+    """Write data to a not-yet-existing file in UPLOAD_DIR, never overwriting.
+
+    Creates the file exclusively (O_EXCL) and, if another upload claimed the
+    name in the meantime, retries with a fresh microsecond-timestamp suffix.
+    Returns the name actually used, or None if no free name could be claimed.
+    """
+    for _ in range(100):
+        target = os.path.join(UPLOAD_DIR, name)
+        try:
+            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            stem, ext = os.path.splitext(name)
+            name = f"{stem}_{datetime.now():%Y%m%d_%H%M%S_%f}{ext}"
+            continue
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        return name
+    return None
 
 
 def _inside_uploads(path: str) -> bool:
@@ -968,9 +996,10 @@ class Handler(BaseHTTPRequestHandler):
                 header_blob, _, filedata = part.partition(b"\r\n\r\n")
                 filedata = filedata.rsplit(b"\r\n", 1)[0]
                 nm = re.search(rb'filename="([^"]*)"', header_blob).group(1)
-                name = safe_name(nm.decode("utf-8", "replace"))
-                with open(os.path.join(UPLOAD_DIR, name), "wb") as fh:
-                    fh.write(filedata)
+                name = save_unique(safe_name(nm.decode("utf-8", "replace")),
+                                   filedata)
+                if name is None:
+                    continue
                 emit_event(f"{self._client_ip()} uploaded "
                            f"{name} ({len(filedata)} B)")
                 saved += 1

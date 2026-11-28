@@ -122,6 +122,29 @@ void main() {
       expect(dlBody, content);
     });
 
+    test('concurrent same-name uploads never overwrite or corrupt each other',
+        () async {
+      final a = List<int>.generate(300000, (i) => i % 251);
+      final b = List<int>.generate(300000, (i) => (i * 7 + 1) % 253);
+      final resA = post('/upload', multipartBody('BND', 'race.bin', a),
+          'multipart/form-data; boundary=BND');
+      final resB = post('/upload', multipartBody('BND', 'race.bin', b),
+          'multipart/form-data; boundary=BND');
+      final responses = await Future.wait([resA, resB]);
+      for (final r in responses) {
+        expect(r.statusCode, 200);
+        await r.drain();
+      }
+      final contents = Directory(tmpDir)
+          .listSync()
+          .where((e) => e is File && e.path.contains('race'))
+          .map((e) => File(e.path).readAsBytesSync())
+          .toList();
+      expect(contents.length, 2, reason: 'both uploads must be stored');
+      expect(contents, anyElement(equals(a)));
+      expect(contents, anyElement(equals(b)));
+    });
+
     test('POST /upload with traversal filename lands inside uploads', () async {
       final body = multipartBody('BND', '../../pwn.txt', utf8.encode('evil'));
       final res = await post('/upload', body, 'multipart/form-data; boundary=BND');

@@ -76,16 +76,36 @@ pub fn safe_name(raw: &str, upload_real: &Path) -> Option<String> {
     if !resolved.starts_with(upload_real) {
         return None;
     }
-    // Avoid overwriting: add a timestamp if the file exists
+    // Avoid overwriting: if the name exists, add a timestamp suffix and keep
+    // bumping a counter until the candidate does not exist yet (the timestamp
+    // alone has 1-second resolution, so it can collide on rapid re-uploads).
     if candidate.exists() {
-        let dot = name.rfind('.').filter(|&i| i > 0);
-        let (stem, ext) = match dot {
-            Some(i) => (&name[..i], &name[i..]),
-            None => (name.as_str(), ""),
-        };
-        return Some(format!("{}_{}{}", stem, timestamp_now(), ext));
+        let (stem, ext) = split_ext(&name);
+        let ts = timestamp_now();
+        let mut suffixed = format!("{stem}_{ts}{ext}");
+        let mut n = 1;
+        while upload_real.join(&suffixed).exists() {
+            n += 1;
+            suffixed = format!("{stem}_{ts}_{n}{ext}");
+        }
+        return Some(suffixed);
     }
     Some(name)
+}
+
+/// Split into (stem, ext) at the last dot, unless the dot is leading.
+fn split_ext(name: &str) -> (&str, &str) {
+    match name.rfind('.').filter(|&i| i > 0) {
+        Some(i) => (&name[..i], &name[i..]),
+        None => (name, ""),
+    }
+}
+
+/// Next candidate name when `name` was claimed by a concurrent upload:
+/// re-suffix with a microsecond timestamp so the retry is unique.
+pub fn collision_bump(name: &str) -> String {
+    let (stem, ext) = split_ext(name);
+    format!("{stem}_{}{ext}", timestamp_now_micros())
 }
 
 pub fn inside_uploads(path: &Path, upload_real: &Path) -> bool {
@@ -203,6 +223,23 @@ mod tests {
         assert!(n.starts_with("exists_") && n.ends_with(".txt"), "got {n}");
         assert_ne!(n, "exists.txt");
         assert!(d.join("exists.txt").exists());
+    }
+
+    #[test]
+    fn taken_timestamp_suffix_gets_unique_name() {
+        // two same-name uploads within the same second must not collide:
+        // occupy both the plain name and the first timestamped candidate
+        let (d, real) = tmp_uploads("exists2");
+        fs::write(d.join("exists.txt"), b"").unwrap();
+        let first = safe_name("exists.txt", &real).unwrap();
+        fs::write(d.join(&first), b"").unwrap();
+        let second = safe_name("exists.txt", &real).unwrap();
+        assert_ne!(first, second);
+        assert!(second.starts_with("exists_") && second.ends_with(".txt"), "got {second}");
+        // the returned name must be free, and the earlier files untouched
+        assert!(!d.join(&second).exists());
+        assert!(d.join("exists.txt").exists());
+        assert!(d.join(&first).exists());
     }
 
     #[test]

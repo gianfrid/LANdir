@@ -167,12 +167,34 @@ async fn upload(
             continue;
         };
         if let Some(name) = security::safe_name(&fname, &s.upload_real) {
-            if tokio::fs::write(s.upload_dir.join(&name), &data).await.is_ok() {
-                emit_event(
-                    &s.activity,
-                    format!("{ip} uploaded {name} ({} B)", data.len()),
-                );
-                saved += 1;
+            // Exclusive create: never overwrite; if a concurrent upload
+            // claimed this name in the meantime, retry with the next free
+            // microsecond-suffixed name.
+            let mut name = name;
+            for _ in 0..100 {
+                let target = s.upload_dir.join(&name);
+                match tokio::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&target)
+                    .await
+                {
+                    Ok(mut f) => {
+                        use tokio::io::AsyncWriteExt;
+                        if f.write_all(&data).await.is_ok() {
+                            emit_event(
+                                &s.activity,
+                                format!("{ip} uploaded {name} ({} B)", data.len()),
+                            );
+                            saved += 1;
+                        }
+                        break;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                        name = security::collision_bump(&name);
+                    }
+                    Err(_) => break,
+                }
             }
         }
     }
@@ -296,6 +318,33 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(body_string(resp).await, "hello rust");
+    }
+
+    #[tokio::test]
+    async fn upload_same_name_twice_keeps_both() {
+        // rapid re-upload of the same name (same second) must not overwrite
+        // or lose either version
+        let (state, dir) = test_state("plain-twice");
+        let app = router(state);
+        for content in [b"version-1".as_slice(), b"version-2"] {
+            let resp = app
+                .clone()
+                .oneshot(post_upload("/upload", "BB", "doc.bin", content))
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+        let mut files: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|f| f.starts_with("doc"))
+            .collect();
+        files.sort();
+        assert_eq!(files.len(), 2, "files={files:?}");
+        let mut contents: Vec<Vec<u8>> =
+            files.iter().map(|f| std::fs::read(dir.join(f)).unwrap()).collect();
+        contents.sort();
+        assert_eq!(contents, vec![b"version-1".to_vec(), b"version-2".to_vec()]);
     }
 
     #[tokio::test]
