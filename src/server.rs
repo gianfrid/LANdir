@@ -48,7 +48,8 @@ impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
 }
 
 /// Every request refreshes the client's presence; failed requests are logged
-/// with the client IP. Listing polls and page loads stay silent.
+/// with the client IP (4xx/5xx, mirroring landir.py's send_error events —
+/// redirects stay quiet). Listing polls and page loads are silent.
 async fn track_activity(
     State(s): State<Arc<AppState>>,
     req: Request,
@@ -61,24 +62,27 @@ async fn track_activity(
     let method = req.method().clone();
     let path = req.uri().path().to_string();
     let resp = next.run(req).await;
-    if !resp.status().is_success() {
+    let status = resp.status();
+    if status.is_client_error() || status.is_server_error() {
         emit_event(
             &s.activity,
-            format!("{ip} {method} {path} -> {}", resp.status().as_u16()),
+            format!("{ip} {method} {path} -> {}", status.as_u16()),
         );
     }
     resp
 }
 
 pub fn router(state: Arc<AppState>) -> Router {
+    // All routes must be registered before the activity layer: axum's
+    // `layer` only wraps routes (and the fallback) added before it, so
+    // anything after it would silently escape presence tracking.
     let mut app = Router::new()
         .route(&state.paths.page, get(serve_page))
         .route(&state.paths.files, get(list_root))
         .route(&format!("{}{{*rest}}", state.paths.ls_prefix), get(list_subdir))
         .route(&format!("{}{{*rest}}", state.paths.fl_prefix), get(download))
         // No upload size limit (known accepted limitation, see SPEC.md)
-        .route(&state.paths.upload, post(upload).layer(DefaultBodyLimit::disable()))
-        .layer(middleware::from_fn_with_state(state.clone(), track_activity));
+        .route(&state.paths.upload, post(upload).layer(DefaultBodyLimit::disable()));
     if let Some(token) = &state.token {
         // bare /<token> redirects (302, like the Python server) to the
         // trailing-slash page so relative URLs resolve
@@ -93,7 +97,13 @@ pub fn router(state: Arc<AppState>) -> Router {
     } else {
         app = app.route("/index.html", get(serve_page));
     }
-    app.with_state(state)
+    // An explicit fallback (unlike axum's default 404) goes through the
+    // activity layer, so unmatched paths — scanner probes, wrong URLs —
+    // refresh presence and are logged like any other request, matching
+    // the Python server which touches and logs every request.
+    app.fallback(|| async { (StatusCode::NOT_FOUND, "not found") })
+        .layer(middleware::from_fn_with_state(state.clone(), track_activity))
+        .with_state(state)
 }
 
 async fn serve_page() -> Html<&'static str> {
@@ -105,24 +115,43 @@ fn json_response(body: String) -> Response<Body> {
 }
 
 async fn list_root(State(s): State<Arc<AppState>>) -> Response<Body> {
-    json_response(listing::entries_json(&listing::list_dir(&s.upload_dir, &s.upload_real)))
+    // read_dir + per-entry canonicalize are blocking: every client polls
+    // this every few seconds, so it must not stall the runtime workers.
+    let dir = s.upload_dir.clone();
+    let real = s.upload_real.clone();
+    let entries = tokio::task::spawn_blocking(move || listing::list_dir(&dir, &real))
+        .await
+        .unwrap_or_default();
+    json_response(listing::entries_json(&entries))
 }
 
 async fn list_subdir(State(s): State<Arc<AppState>>, uri: Uri) -> Response<Body> {
     let raw = uri.path();
     let rel = raw.strip_prefix(&s.paths.ls_prefix).unwrap_or(raw);
-    let rel = percent_encoding::percent_decode_str(rel).decode_utf8_lossy();
-    let mut dir = s.upload_dir.clone();
-    for part in rel.split('/') {
-        match security::safe_path_component(part) {
-            Some(p) => dir.push(p),
-            None => return (StatusCode::NOT_FOUND, "not found").into_response(),
+    let rel = percent_encoding::percent_decode_str(rel).decode_utf8_lossy().into_owned();
+    let dir = s.upload_dir.clone();
+    let real = s.upload_real.clone();
+    // blocking fs work (component checks, is_dir, listing) off the runtime
+    let listed = tokio::task::spawn_blocking(move || -> Option<Vec<listing::Entry>> {
+        let mut dir = dir;
+        for part in rel.split('/') {
+            match security::safe_path_component(part) {
+                Some(p) => dir.push(p),
+                None => return None,
+            }
         }
+        if !security::inside_uploads(&dir, &real) || !dir.is_dir() {
+            return None;
+        }
+        Some(listing::list_dir(&dir, &real))
+    })
+    .await
+    .ok()
+    .flatten();
+    match listed {
+        Some(entries) => json_response(listing::entries_json(&entries)),
+        None => (StatusCode::NOT_FOUND, "not found").into_response(),
     }
-    if !security::inside_uploads(&dir, &s.upload_real) || !dir.is_dir() {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
-    }
-    json_response(listing::entries_json(&listing::list_dir(&dir, &s.upload_real)))
 }
 
 async fn download(
@@ -131,8 +160,15 @@ async fn download(
     uri: Uri,
 ) -> Response<Body> {
     let raw = uri.path();
-    let rel = raw.strip_prefix(&s.paths.fl_prefix).unwrap_or(raw);
-    let Some(path) = security::download_lookup(rel, &s.upload_dir, &s.upload_real) else {
+    let rel = raw.strip_prefix(&s.paths.fl_prefix).unwrap_or(raw).to_string();
+    let dir = s.upload_dir.clone();
+    let real = s.upload_real.clone();
+    // download_lookup decodes internally; the raw path is passed as-is
+    let path = tokio::task::spawn_blocking(move || security::download_lookup(&rel, &dir, &real))
+        .await
+        .ok()
+        .flatten();
+    let Some(path) = path else {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     };
     let Ok(file) = tokio::fs::File::open(&path).await else {
@@ -159,6 +195,7 @@ async fn upload(
     mut multipart: Multipart,
 ) -> Response<Body> {
     let mut saved = 0;
+    let mut failed = false;
     while let Ok(Some(field)) = multipart.next_field().await {
         let Some(fname) = field.file_name().map(|f| f.to_string()) else {
             continue;
@@ -166,46 +203,52 @@ async fn upload(
         let Ok(data) = field.bytes().await else {
             continue;
         };
-        if let Some(name) = security::safe_name(&fname, &s.upload_real) {
-            // Exclusive create: never overwrite; if a concurrent upload
-            // claimed this name in the meantime, retry with the next free
-            // microsecond-suffixed name.
-            let mut name = name;
-            for _ in 0..100 {
-                let target = s.upload_dir.join(&name);
-                match tokio::fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&target)
-                    .await
-                {
-                    Ok(mut f) => {
-                        use tokio::io::AsyncWriteExt;
-                        // shutdown() flushes and closes the file and is
-                        // awaited: dropping a tokio File without it can
-                        // discard the just-written bytes (they land on the
-                        // blocking pool), leaving an empty file on disk.
-                        if f.write_all(&data).await.is_ok()
-                            && f.shutdown().await.is_ok()
-                        {
-                            emit_event(
-                                &s.activity,
-                                format!("{ip} uploaded {name} ({} B)", data.len()),
-                            );
-                            saved += 1;
-                        }
-                        break;
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                        name = security::collision_bump(&name);
-                    }
-                    Err(_) => break,
-                }
+        let len = data.len();
+        let dir = s.upload_dir.clone();
+        let real = s.upload_real.clone();
+        let raw_name = fname.clone();
+        // Staged + atomically published: never overwrites, never visible
+        // half-written (mirrors landir.py's save_unique). All the blocking
+        // fs work runs off the runtime thread.
+        let outcome = tokio::task::spawn_blocking(move || -> std::io::Result<Option<String>> {
+            let Some(name) = security::safe_name(&fname, &real) else {
+                return Ok(None); // rejected name: skip the part
+            };
+            security::save_unique(&name, &data, &dir)
+        })
+        .await;
+        match outcome {
+            Ok(Ok(Some(final_name))) => {
+                emit_event(
+                    &s.activity,
+                    format!("{ip} uploaded {final_name} ({len} B)"),
+                );
+                saved += 1;
+            }
+            Ok(Ok(None)) => {} // rejected or no free name: skip the part
+            Ok(Err(e)) => {
+                // server-side save failure (disk full, dir gone, …):
+                // surface it instead of misreporting a client error
+                emit_event(
+                    &s.activity,
+                    format!("{ip} save failed for {raw_name:?}: {e:?}"),
+                );
+                failed = true;
+            }
+            Err(join) => {
+                // the blocking task itself died — treat like a save failure
+                emit_event(
+                    &s.activity,
+                    format!("{ip} save failed for {raw_name:?}: {join}"),
+                );
+                failed = true;
             }
         }
     }
     if saved > 0 {
         (StatusCode::OK, "OK").into_response()
+    } else if failed {
+        (StatusCode::INTERNAL_SERVER_ERROR, "Save failed").into_response()
     } else {
         (StatusCode::BAD_REQUEST, "No file saved").into_response()
     }
@@ -354,6 +397,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn concurrent_same_name_uploads_never_collide() {
+        // SPEC rule 4: exclusive publish + suffix re-roll means N tasks
+        // uploading the same name must yield N distinct files, each
+        // content preserved exactly once
+        let (state, dir) = test_state("plain-concurrent");
+        let app = std::sync::Arc::new(router(state));
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let app = std::sync::Arc::clone(&app);
+            handles.push(tokio::spawn(async move {
+                let resp = app
+                    .as_ref()
+                    .clone()
+                    .oneshot(post_upload(
+                        "/upload",
+                        "BB",
+                        "race.bin",
+                        format!("payload-{i}").as_bytes(),
+                    ))
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+            }));
+        }
+        for h in handles {
+            h.await.unwrap();
+        }
+        let mut files: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|f| f.starts_with("race"))
+            .collect();
+        files.sort();
+        assert_eq!(files.len(), 8, "files={files:?}");
+        let mut contents: Vec<Vec<u8>> =
+            files.iter().map(|f| std::fs::read(dir.join(f)).unwrap()).collect();
+        contents.sort();
+        let mut expected: Vec<Vec<u8>> =
+            (0..8).map(|i| format!("payload-{i}").into_bytes()).collect();
+        expected.sort();
+        assert_eq!(contents, expected);
+    }
+
+    #[tokio::test]
     async fn upload_traversal_lands_inside() {
         let (state, dir) = test_state("plain-trav");
         let resp = router(state)
@@ -466,6 +553,176 @@ mod tests {
             state.activity.online(),
             vec![IpAddr::from([127, 0, 0, 1])]
         );
+    }
+
+    #[tokio::test]
+    async fn upload_leaves_no_staging_files() {
+        // the body is staged in a hidden temp file and published atomically:
+        // nothing lingers besides the final name
+        let (state, dir) = test_state("plain-atomic");
+        let app = router(state);
+        let resp = app
+            .oneshot(post_upload("/upload", "BB", "atomic.txt", b"fully written"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(std::fs::read(dir.join("atomic.txt")).unwrap(), b"fully written");
+        let names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            !names.iter().any(|n| n.starts_with(".landir_tmp")),
+            "staging files must not linger after publish: {names:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn listing_hides_hidden_names() {
+        // dot-prefixed files (incl. any in-flight staging temps) never
+        // appear in the /files listing and are not downloadable
+        let (state, dir) = test_state("plain-hidden");
+        std::fs::write(dir.join(".hidden.txt"), b"secret").unwrap();
+        let app = router(state);
+        let resp = app
+            .clone()
+            .oneshot(post_upload("/upload", "BB", "shown.txt", b"data"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app
+            .clone()
+            .oneshot(Request::builder().uri("/files").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body_string(resp).await;
+        assert!(body.contains("\"name\": \"shown.txt\""), "body={body}");
+        assert!(!body.contains(".hidden.txt"), "body={body}");
+        let resp = app
+            .oneshot(Request::builder().uri("/fl/.hidden.txt").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn upload_save_failure_is_500_with_event() {
+        // a server-side save failure (uploads dir gone) must surface as a
+        // 500 with an event — not as a client-error 400
+        let (state, dir) = test_state("plain-savefail");
+        let app = router(state.clone());
+        std::fs::remove_dir_all(&dir).unwrap();
+        let resp = app
+            .oneshot(post_upload("/upload", "BB", "fail.txt", b"x"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body_string(resp).await, "Save failed");
+        let events: Vec<String> = state
+            .activity
+            .events()
+            .iter()
+            .map(|(_, t)| t.clone())
+            .collect();
+        assert!(
+            events.iter().any(|e| e.contains("save failed for \"fail.txt\"")),
+            "{events:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn unmatched_paths_are_tracked() {
+        // axum's default 404 fallback is not layered: an explicit fallback
+        // must keep scanner probes / wrong URLs visible (presence + event)
+        let (state, _d) = test_state("plain-unmatched");
+        let app = router(state.clone());
+        let addr = SocketAddr::from(([127, 0, 0, 1], 41001));
+        let mut req = Request::builder().uri("/nope").body(Body::empty()).unwrap();
+        req.extensions_mut().insert(ConnectInfo(addr));
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        let events: Vec<String> = state
+            .activity
+            .events()
+            .iter()
+            .map(|(_, t)| t.clone())
+            .collect();
+        assert!(
+            events.iter().any(|e| e == "127.0.0.1 GET /nope -> 404"),
+            "{events:?}"
+        );
+        assert_eq!(
+            state.activity.online(),
+            vec![IpAddr::from([127, 0, 0, 1])]
+        );
+    }
+
+    #[tokio::test]
+    async fn bare_token_redirect_refreshes_presence_without_event() {
+        // the redirect route is registered before the activity layer, so it
+        // refreshes presence; like landir.py it stays silent (no send_error)
+        let (state, _d) = test_state("secret-track");
+        let app = router(state.clone());
+        let addr = SocketAddr::from(([127, 0, 0, 1], 41002));
+        let mut req = Request::builder()
+            .uri("/testtoken123")
+            .body(Body::empty())
+            .unwrap();
+        req.extensions_mut().insert(ConnectInfo(addr));
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FOUND);
+        assert_eq!(
+            state.activity.online(),
+            vec![IpAddr::from([127, 0, 0, 1])]
+        );
+        assert!(state.activity.events().is_empty(), "redirect must stay quiet");
+    }
+
+    #[tokio::test]
+    async fn index_html_refreshes_presence() {
+        // insecure mode: /index.html was registered after the layer before
+        // and escaped tracking; it must refresh presence like the page
+        let (state, _d) = test_state("plain-index");
+        let app = router(state.clone());
+        let addr = SocketAddr::from(([127, 0, 0, 1], 41003));
+        let mut req = Request::builder()
+            .uri("/index.html")
+            .body(Body::empty())
+            .unwrap();
+        req.extensions_mut().insert(ConnectInfo(addr));
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            state.activity.online(),
+            vec![IpAddr::from([127, 0, 0, 1])]
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn symlink_escape_endpoints_404() {
+        // endpoints must not serve (or even list) a symlink that resolves
+        // outside the uploads dir
+        let (state, dir) = test_state("plain-symlink");
+        std::os::unix::fs::symlink("/etc/hostname", dir.join("evil.txt")).unwrap();
+        std::os::unix::fs::symlink("/etc", dir.join("etcdir")).unwrap();
+        let app = router(state);
+        for uri in ["/fl/evil.txt", "/ls/etcdir", "/fl/etcdir/passwd"] {
+            let resp = app
+                .clone()
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "uri={uri}");
+        }
+        let resp = app
+            .oneshot(Request::builder().uri("/files").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = body_string(resp).await;
+        assert!(!body.contains("evil.txt"), "body={body}");
+        assert!(!body.contains("etcdir"), "body={body}");
     }
 
     #[tokio::test]

@@ -31,11 +31,16 @@ pub fn list_dir(dir: &Path, upload_real: &Path) -> Vec<Entry> {
             if !inside_uploads(&path, upload_real) {
                 continue;
             }
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                // hidden names are never served: in-flight upload staging
+                // files stay invisible until fully written
+                continue;
+            }
             let md = match e.metadata() {
                 Ok(m) => m,
                 Err(_) => continue,
             };
-            let name = e.file_name().to_string_lossy().into_owned();
             if md.is_dir() {
                 entries.push(Entry { name, size: 0, is_dir: true, mtime: mtime_f64(&md) });
             } else if md.is_file() {

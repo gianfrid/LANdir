@@ -271,17 +271,27 @@ async fn main() {
 
     if tui::is_tty() {
         // Interactive terminal (e.g. `podman run -it`): full-screen UI on the
-        // main thread, HTTP server on a tokio task.
+        // main thread, HTTP server on a tokio task. While the UI owns the
+        // terminal, events must not be printed as plain log lines.
+        activity::set_plain_mode(false);
+        let shutdown = Arc::new(tokio::sync::Notify::new());
+        let server_shutdown = Arc::clone(&shutdown);
         let server = tokio::spawn(async move {
             axum::serve(listener, make_svc)
-                .with_graceful_shutdown(async {
-                    let _ = tokio::signal::ctrl_c().await;
+                .with_graceful_shutdown(async move {
+                    server_shutdown.notified().await;
                 })
                 .await
                 .expect("server error");
         });
         let _ = tui::run(&state.activity, &url);
-        server.abort();
+        activity::set_plain_mode(true);
+        // Quit must not truncate in-flight uploads (an aborted write would
+        // leave a stale .landir_tmp_* behind): signal graceful shutdown and
+        // let the server drain before exiting. The bound keeps a wedged
+        // connection from hanging shutdown forever.
+        shutdown.notify_one();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(10), server).await;
         println!("Stopped.");
         return;
     }

@@ -108,6 +108,78 @@ pub fn collision_bump(name: &str) -> String {
     format!("{stem}_{}{ext}", timestamp_now_micros())
 }
 
+/// Write an upload body to a unique hidden staging file inside the uploads
+/// dir. Staging in the same directory (same filesystem) keeps the atomic
+/// publish below possible; the dot prefix keeps in-flight uploads out of
+/// the listings, which filter hidden names.
+fn stage_temp(upload_dir: &Path, data: &[u8]) -> std::io::Result<PathBuf> {
+    loop {
+        let tmp = upload_dir.join(format!(
+            ".landir_tmp_{}_{}",
+            timestamp_now_micros(),
+            std::process::id()
+        ));
+        match fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+            Ok(mut f) => {
+                std::io::Write::write_all(&mut f, data)?;
+                return Ok(tmp);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                continue // same-microsecond collision: re-roll the name
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// Atomically publish a staged file under its final name; false if the
+/// name is already taken. `hard_link` is the atomic publication step: it
+/// fails with AlreadyExists instead of overwriting (SPEC rule 4), so a
+/// concurrent same-name upload can never clobber an existing file.
+fn publish(tmp: &Path, target: &Path) -> bool {
+    match fs::hard_link(tmp, target) {
+        Ok(()) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => false,
+        Err(_) => {
+            // Filesystem without hardlink support (e.g. vfat/exfat): fall
+            // back to a checked rename. The exists() race window is
+            // microscopic and the suffix re-roll in save_unique still
+            // guarantees uniqueness.
+            if target.exists() {
+                false
+            } else {
+                fs::rename(tmp, target).is_ok()
+            }
+        }
+    }
+}
+
+/// Write data to a not-yet-existing file in the uploads dir, never
+/// overwriting. The body is staged in a hidden temp file and only becomes
+/// visible under its final name once fully written (atomic link), so
+/// concurrent listings and downloads never see a partial file. If another
+/// upload claimed the name in the meantime, retries with a fresh
+/// microsecond-timestamp suffix. Ok(None) means no free name could be
+/// claimed; Err is a server-side IO failure (disk full, dir gone, …).
+pub fn save_unique(
+    name: &str,
+    data: &[u8],
+    upload_dir: &Path,
+) -> std::io::Result<Option<String>> {
+    let mut name = name.to_string();
+    for _ in 0..100 {
+        let tmp = stage_temp(upload_dir, data)?;
+        if publish(&tmp, &upload_dir.join(&name)) {
+            // drop the staging name; the data lives under the published one
+            let _ = fs::remove_file(&tmp);
+            return Ok(Some(name));
+        }
+        let _ = fs::remove_file(&tmp); // consumed by rename, or restaged
+        name = collision_bump(&name);
+    }
+    Ok(None)
+}
+
 pub fn inside_uploads(path: &Path, upload_real: &Path) -> bool {
     match fs::canonicalize(path) {
         Ok(p) => p.starts_with(upload_real),
@@ -240,6 +312,21 @@ mod tests {
         assert!(!d.join(&second).exists());
         assert!(d.join("exists.txt").exists());
         assert!(d.join(&first).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_escape_rejected() {
+        // defense in depth (SPEC rule 1): a symlink planted inside the
+        // uploads dir must not make safe_name/download_lookup resolve
+        // outside it — this is the containment branch's whole purpose
+        let (d, real) = tmp_uploads("symlink");
+        std::os::unix::fs::symlink("/etc/passwd", d.join("evil")).unwrap();
+        assert!(safe_name("evil", &real).is_none());
+        assert!(download_lookup("evil", &d, &real).is_none());
+        // a dangling symlink is rejected too (never written through)
+        std::os::unix::fs::symlink("/nonexistent-target-xyz", d.join("dangling")).unwrap();
+        assert!(safe_name("dangling", &real).is_none());
     }
 
     #[test]
