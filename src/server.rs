@@ -181,7 +181,13 @@ async fn upload(
                 {
                     Ok(mut f) => {
                         use tokio::io::AsyncWriteExt;
-                        if f.write_all(&data).await.is_ok() {
+                        // shutdown() flushes and closes the file and is
+                        // awaited: dropping a tokio File without it can
+                        // discard the just-written bytes (they land on the
+                        // blocking pool), leaving an empty file on disk.
+                        if f.write_all(&data).await.is_ok()
+                            && f.shutdown().await.is_ok()
+                        {
                             emit_event(
                                 &s.activity,
                                 format!("{ip} uploaded {name} ({} B)", data.len()),
