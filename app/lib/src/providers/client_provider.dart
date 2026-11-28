@@ -71,10 +71,17 @@ class ClientState {
   final String? error;
   final String? statusMessage;
 
-  /// Base URL of a server that answered 404 and was removed from the
-  /// registry. Set once so the UI can tell the user; cleared by
-  /// [ClientController.acknowledgeRemovedServer].
+  /// Base URL of a server that was dropped from the registry because it can
+  /// never work again (404, or a sealed listing that no longer authenticates
+  /// under the pinned key). Set once so the UI can tell the user why;
+  /// [ClientState.removedServerReason] carries the human-readable sentence;
+  /// both are cleared by [ClientController.acknowledgeRemovedServer].
   final String? removedServerUrl;
+
+  /// Why the server at [ClientState.removedServerUrl] was dropped, shown to
+  /// the user by the client view (the URL alone is not enough to tell a 404
+  /// apart from a stale pin).
+  final String? removedServerReason;
 
   /// A server whose URL points outside the LAN (public IP or DNS name).
   /// Held here until the user confirms adding it; null otherwise.
@@ -98,14 +105,16 @@ class ClientState {
     this.error,
     this.statusMessage,
     this.removedServerUrl,
+    this.removedServerReason,
     this.pendingNonLanServer,
     this.pendingKeyConflict,
     this.pendingShares = const [],
   });
 
   /// Null conventions differ by field, matching how each is used:
-  /// - `error`, `statusMessage`, `removedServerUrl` are transient messages:
-  ///   they are always reset unless a non-null value is passed.
+  /// - `error`, `statusMessage`, `removedServerUrl`, `removedServerReason`
+  ///   are transient messages: they are always reset unless a non-null value
+  ///   is passed.
   /// - `current` cannot be reset by passing null (that means "keep"), so
   ///   [clearCurrent] exists; callers clearing `current` reset
   ///   `currentPath`/`files` explicitly.
@@ -119,6 +128,7 @@ class ClientState {
     String? error,
     String? statusMessage,
     String? removedServerUrl,
+    String? removedServerReason,
     SavedServer? pendingNonLanServer,
     bool clearPendingNonLanServer = false,
     ({SavedServer existing, SavedServer scanned})? pendingKeyConflict,
@@ -134,6 +144,7 @@ class ClientState {
         error: error,
         statusMessage: statusMessage,
         removedServerUrl: removedServerUrl,
+        removedServerReason: removedServerReason,
         pendingNonLanServer:
             clearPendingNonLanServer ? null : (pendingNonLanServer ?? this.pendingNonLanServer),
         pendingKeyConflict: clearPendingKeyConflict
@@ -144,7 +155,8 @@ class ClientState {
 }
 
 /// True when the file browser should leave its route: the server it was
-/// browsing was deselected (deleted manually, or dropped after a 404).
+/// browsing was deselected (deleted manually, or dropped as unusable after a
+/// 404 or a failed sealed listing).
 ///
 /// Keyed on the `current` transition rather than the one-shot
 /// [ClientState.removedServerUrl] flag, so it cannot be affected by the
@@ -317,7 +329,15 @@ class ClientController extends _$ClientController {
       final files = await _client!.listDir('');
       state = state.copyWith(files: files, loading: false);
     } on ServerGoneException {
-      _forgetServer(server);
+      _forgetServer(server,
+          'Server ${server.name} no longer exists (404) — removed from '
+          'your server list.');
+      return;
+    } on SealedExchangeException catch (e) {
+      _forgetServer(server,
+          'Server ${server.name} no longer accepts this app\'s pinned key '
+          '($e) — removed from your server list. Re-scan its QR code to '
+          'pair again.');
       return;
     } catch (e) {
       state = state.copyWith(
@@ -391,29 +411,40 @@ class ClientController extends _$ClientController {
       final files = await client.listDir(state.currentPath);
       state = state.copyWith(files: files, loading: false);
     } on ServerGoneException {
-      _forgetServer(current);
+      _forgetServer(current,
+          'Server ${current.name} no longer exists (404) — removed from '
+          'your server list.');
+    } on SealedExchangeException catch (e) {
+      _forgetServer(current,
+          'Server ${current.name} no longer accepts this app\'s pinned key '
+          '($e) — removed from your server list. Re-scan its QR code to '
+          'pair again.');
     } catch (e) {
       state = state.copyWith(loading: false, error: 'Refresh failed: $e');
     }
   }
 
-  /// The server answered 404: it no longer exists (stopped, restarted with a
-  /// new token, or moved). Drop it from the registry and deselect it.
-  void _forgetServer(SavedServer server) {
+  /// The server can never answer this client again — it answered 404 (base
+  /// URL no longer maps to a LANdir server) or the sealed listing no longer
+  /// authenticates under the pinned key (host re-keyed, pin stale). Drop it
+  /// from the registry and deselect it. [reason] is the user-facing
+  /// sentence recorded in [ClientState.error] and shown by the client view.
+  void _forgetServer(SavedServer server, String reason) {
     _client?.close();
     _client = null;
     _dropServer(
       server.baseUrl,
-      error: 'Server ${server.name} no longer exists (404) — removed from '
-          'your server list.',
+      error: reason,
       removedUrl: server.baseUrl,
+      removedReason: reason,
     );
   }
 
   /// Remove [baseUrl] from the registry, deselect it if it is current, and
-  /// persist. [error]/[removedUrl] are set only when the server was dropped
-  /// because it answered 404 (see [_forgetServer]).
-  void _dropServer(String baseUrl, {String? error, String? removedUrl}) {
+  /// persist. [error]/[removedUrl]/[removedReason] are set only when the
+  /// server was dropped as unusable (see [_forgetServer]).
+  void _dropServer(String baseUrl,
+      {String? error, String? removedUrl, String? removedReason}) {
     final servers = state.servers.where((s) => s.baseUrl != baseUrl).toList();
     final wasCurrent = state.current?.baseUrl == baseUrl;
     if (wasCurrent) {
@@ -427,13 +458,14 @@ class ClientController extends _$ClientController {
       loading: false,
       error: error,
       removedServerUrl: removedUrl,
+      removedServerReason: removedReason,
     );
     _persistServers(servers);
   }
 
   /// Clear the "server removed" flag once the UI has shown it.
   void acknowledgeRemovedServer() {
-    state = state.copyWith(removedServerUrl: null);
+    state = state.copyWith(removedServerUrl: null, removedServerReason: null);
   }
 
   /// Navigate into a subdirectory.

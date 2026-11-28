@@ -41,6 +41,21 @@ class ServerGoneException extends HttpException {
   ServerGoneException(this.url) : super('server gone (404): $url');
 }
 
+/// A sealed listing exchange failed: the host answered, but not with an
+/// authenticated 200 — it rejected our envelope (the host re-keyed or the
+/// pin is stale) or the response did not open under the pinned key
+/// (tampering). A pinned host is always sealed with never a fallback, so
+/// this can never succeed later: callers treat it like [ServerGoneException]
+/// and drop the host. Only raised for the pinned-key listing path; a missing
+/// subfolder on a live host stays a plain [HttpException].
+class SealedExchangeException extends HttpException {
+  final String url;
+  final int status;
+
+  SealedExchangeException(this.url, this.status)
+      : super('sealed exchange failed ($status): $url');
+}
+
 /// A LANdir server the client can talk to.
 class LANdirClient {
   final String baseUrl; // e.g. http://192.168.1.5:8000/abc123/
@@ -143,7 +158,7 @@ class LANdirClient {
       throw HttpException('sealed listDir failed: folder not found (404)');
     }
     if (status != 200 || opened == null) {
-      throw HttpException('sealed listDir failed: $status');
+      throw SealedExchangeException(url, status);
     }
     return _parseListing(utf8.decode(opened), url);
   }

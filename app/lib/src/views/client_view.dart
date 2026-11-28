@@ -29,13 +29,15 @@ class _ClientViewState extends ConsumerState<ClientView> {
     final ref = this.ref;
     final state = ref.watch(clientControllerProvider);
 
-    // Surface a server that was dropped because it answered 404.
+    // Surface a server that was dropped as unusable: it answered 404, or its
+    // sealed listing no longer authenticates under the pinned key.
     ref.listen(clientControllerProvider, (prev, next) {
       final url = next.removedServerUrl;
       if (url == null || url == prev?.removedServerUrl) return;
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(SnackBar(
-        content: Text('Server $url no longer exists (404). It was removed.'),
+        content: Text(next.removedServerReason ??
+            'Server $url no longer exists (404). It was removed.'),
       ));
       ref.read(clientControllerProvider.notifier).acknowledgeRemovedServer();
     });

@@ -17,9 +17,10 @@ class FileBrowserView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The browsed server was deselected (deleted, or dropped after a 404):
-    // leave this now-serverless browser. Keyed on the `current` transition
-    // so it does not depend on listener ordering.
+    // The browsed server was deselected (deleted manually, or dropped as
+    // unusable after a 404 / failed sealed listing): leave this
+    // now-serverless browser. Keyed on the `current` transition so it does
+    // not depend on listener ordering.
     ref.listen(clientControllerProvider, (prev, next) {
       if (shouldLeaveBrowser(prev, next) && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();

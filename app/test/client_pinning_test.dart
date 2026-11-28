@@ -212,7 +212,55 @@ void main() {
     controller.addServer(
         'http://127.0.0.1:${server.boundPort}/$wrongFrag');
     await controller.selectServer(stateOf(container).servers.first);
-    expect(stateOf(container).error, isNotNull); // sealed listing failed, not plaintext
-    expect(stateOf(container).files, isEmpty);
+    // Sealed listing failed, not plaintext — and the stale pin can never
+    // succeed, so the host is dropped like a 404, not kept as dead weight.
+    final state = stateOf(container);
+    expect(state.error, isNotNull);
+    expect(state.error, contains('pinned key'));
+    expect(state.files, isEmpty);
+    expect(state.servers, isEmpty);
+    expect(state.current, isNull);
+    expect(state.removedServerUrl, 'http://127.0.0.1:${server.boundPort}/');
+    expect(state.removedServerReason, contains('Re-scan'));
+
+    // The removal is persisted, so a fresh app start does not resurrect it.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('landir_saved_servers');
+    expect((jsonDecode(raw!) as Map<String, dynamic>)['servers'], isEmpty);
+  });
+
+  test('a sealed folder that disappears keeps the host registered', () async {
+    File('$tmpDir/secret.txt').writeAsStringSync('s3cret');
+    Directory('$tmpDir/gone').createSync();
+    File('$tmpDir/gone/inner.txt').writeAsStringSync('inner');
+    final server = LANdirServer(
+      ServerConfig(
+          port: 0,
+          uploadDir: tmpDir,
+          insecure: true,
+          encrypted: true),
+      DirectoryFileSink(tmpDir),
+      hostKey: hostKey,
+    );
+    await server.start();
+    addTearDown(() => server.stop());
+
+    controller.addServer(
+        'http://127.0.0.1:${server.boundPort}/${keyFragment()}');
+    final entry = stateOf(container).servers.single;
+    await controller.selectServer(entry);
+    await controller.navigateInto('gone');
+    expect(stateOf(container).files.map((f) => f.name), contains('inner.txt'));
+
+    // The folder is deleted on the host: the sealed listing 404s, but the
+    // root still answers — only the folder is gone, not the host.
+    Directory('$tmpDir/gone').deleteSync(recursive: true);
+    await controller.refresh();
+    final state = stateOf(container);
+    expect(state.error, contains('folder not found'));
+    expect(state.servers.map((s) => s.baseUrl), contains(entry.baseUrl));
+    expect(state.current?.baseUrl, entry.baseUrl);
+    expect(state.removedServerUrl, isNull);
   });
 }

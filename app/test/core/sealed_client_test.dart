@@ -78,8 +78,21 @@ void main() {
     final evil = LANdirClient(baseUrl, hostKey: wrongHost.publicKey);
     addTearDown(() => evil.close());
     // The server cannot authenticate the envelope's response to us: the
-    // response either 400s or fails to open — both surface as exceptions.
-    expect(() => evil.listDir(''), throwsA(isA<HttpException>()));
+    // sealed exchange fails — surfaced as SealedExchangeException so
+    // callers drop the stale pin instead of keeping a dead host.
+    expect(() => evil.listDir(''), throwsA(isA<SealedExchangeException>()));
+  });
+
+  test('sealed listing of a missing folder is a plain error, not gone',
+      () async {
+    // The host answers 404 for the folder, but the sealed root listing
+    // still succeeds: only the folder is gone. This must NOT be a
+    // SealedExchangeException — the pin still works and the host stays.
+    await expectLater(
+        client.listDir('missing'),
+        throwsA(predicate((e) =>
+            e is HttpException && e is! SealedExchangeException &&
+            e.message.contains('folder not found'))));
   });
 
   test('keyless client against keyless host still works (plaintext mode)',
