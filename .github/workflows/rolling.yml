@@ -18,6 +18,10 @@
 # a debug-signed APK that users would install over the signed one. The
 # AppImage is built by the shared scripts/build-appimage.sh, which it has
 # in common with release.yml, so the two channels cannot drift apart.
+#
+# Publish is gated on green suites: ci.yml runs concurrently on the same
+# push but cannot gate a separate workflow, so the tests run here too —
+# a red run must not ship an APK to Obtanium auto-updaters or move :latest.
 name: Rolling
 
 on:
@@ -29,18 +33,54 @@ permissions:
   contents: write # move the rolling tag, create/update the release
   packages: write # push the rolling image to ghcr.io
 
+concurrency:
+  # One rolling pipeline at a time: the apk/appimage jobs force-push the
+  # `rolling` tag and clobber the same release assets, so overlapping runs
+  # could interleave artifacts from different commits. A newer push
+  # supersedes the older run entirely.
+  group: rolling
+  cancel-in-progress: true
+
 jobs:
-  apk:
+  tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      - name: Python tests
+        run: python3 -m unittest discover -s tests
+
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - name: Rust tests
+        run: cargo test --locked
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: 3.50.1
+          channel: stable
+          cache: true
+      - name: Fetch packages
+        working-directory: app
+        run: flutter pub get
+      - name: App tests
+        working-directory: app
+        run: flutter test
+
+  apk:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: 3.50.1
           channel: stable
@@ -103,16 +143,17 @@ jobs:
   # in scripts/build-appimage.sh, shared with release.yml — same factoring
   # as the APK: one tested recipe, each workflow owns its publish steps.
   appimage:
+    needs: tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Flutter's Linux runner links GTK3; the headers and ninja are not on
       # the runner image (clang/cmake/pkg-config are).
       - name: Linux desktop build deps
         run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: 3.50.1
           channel: stable
@@ -145,16 +186,17 @@ jobs:
   # amd64 image only; the arm64 image is built by the monthly scheduled
   # workflow (arm64-monthly.yml).
   image:
+    needs: tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       # Prefer a PAT (secret GHCR_TOKEN, scopes read:packages + write:packages):
       # the default GITHUB_TOKEN is denied (read_package) when the ghcr
       # namespace already has an unlinked package. Falls back to GITHUB_TOKEN.
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

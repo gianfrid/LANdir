@@ -1,12 +1,13 @@
 # Containerfile for LANdir (default: the Rust implementation, distroless static image).
-# Multi-stage build: pinned rust:1.88-alpine compiles a fully static musl binary;
+# Multi-stage build: pinned rust:1.100-alpine compiles a fully static musl binary;
 # Compatible with both podman and docker (docker build -f Containerfile .)
 #
 # Build stage: Alpine's rustc targets musl natively, so a --release build there
-# is a fully static binary that needs no libc at all. The builder image is
-# pinned for reproducibility; Cargo.lock pins the crate versions.
+# is a fully static binary that needs no libc at all. Builder and runtime images
+# are pinned by digest for reproducibility (Dependabot keeps tag+digest in
+# sync); Cargo.lock pins the crate versions.
 
-FROM docker.io/library/rust:1.100-alpine AS build
+FROM docker.io/library/rust:1.100-alpine@sha256:8d0e82abfdf9a38071e07cabc5afba4ddbe077631a80e4e742a760c38beadc33 AS build
 ARG TARGETARCH
 RUN apk add --no-cache musl-dev
 WORKDIR /build

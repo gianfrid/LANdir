@@ -7,18 +7,30 @@ on:
     branches: [slop]
 
 jobs:
-  test:
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        # landir.py must keep running on a bare old python3 (README claims
+        # 3.7+); 3.9 is the oldest prebuilt on the current runner images.
+        # Newer-syntax regressions (walrus, match, removeprefix, …) fail here.
+        python-version: ["3.9", "3.12"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: Python tests
         run: python3 -m unittest discover -s tests
 
-      - uses: dtolnay/rust-toolchain@stable
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
       - name: Rust tests
         run: cargo test --locked
 
@@ -50,9 +62,9 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: 3.50.1
           channel: stable
