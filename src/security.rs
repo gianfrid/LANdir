@@ -190,7 +190,19 @@ pub fn inside_uploads(path: &Path, upload_real: &Path) -> bool {
 /// Sanitize a single path component (filename or directory name).
 /// Returns None if invalid.
 pub fn safe_path_component(raw: &str) -> Option<String> {
-    let name = decode(raw).replace('\\', "/");
+    component_impl(raw, true)
+}
+
+/// Same, but the name is taken verbatim (no percent-decoding) — the sealed
+/// endpoints carry the path inside the encrypted envelope, not URL-encoded
+/// on the wire, so a real folder named "100%20off" must not be mangled.
+pub fn safe_path_component_raw(raw: &str) -> Option<String> {
+    component_impl(raw, false)
+}
+
+fn component_impl(raw: &str, decode_url: bool) -> Option<String> {
+    let name = if decode_url { decode(raw) } else { raw.to_string() };
+    let name = name.replace('\\', "/");
     let name = basename(&name);
     let name: String = name.chars().filter(|c| !is_ctrl(*c)).collect();
     let name = name.trim();
@@ -206,10 +218,25 @@ pub fn safe_path_component(raw: &str) -> Option<String> {
 /// Resolve a client-requested file name to a path inside the uploads dir.
 /// Returns None if the name is rejected. Supports subdirectory paths.
 pub fn download_lookup(raw: &str, upload_dir: &Path, upload_real: &Path) -> Option<PathBuf> {
-    let raw = decode(raw);
+    download_lookup_impl(raw, upload_dir, upload_real, true)
+}
+
+/// Same, but the path is taken verbatim (no percent-decoding) — the sealed
+/// download endpoint carries the path inside the encrypted envelope.
+pub fn download_lookup_raw(raw: &str, upload_dir: &Path, upload_real: &Path) -> Option<PathBuf> {
+    download_lookup_impl(raw, upload_dir, upload_real, false)
+}
+
+fn download_lookup_impl(
+    raw: &str,
+    upload_dir: &Path,
+    upload_real: &Path,
+    decode_url: bool,
+) -> Option<PathBuf> {
+    let raw = if decode_url { decode(raw) } else { raw.to_string() };
     let mut parts = Vec::new();
     for part in raw.split('/') {
-        parts.push(safe_path_component(part)?);
+        parts.push(component_impl(part, decode_url)?);
     }
     if parts.is_empty() {
         return None;
@@ -327,6 +354,22 @@ mod tests {
         // a dangling symlink is rejected too (never written through)
         std::os::unix::fs::symlink("/nonexistent-target-xyz", d.join("dangling")).unwrap();
         assert!(safe_name("dangling", &real).is_none());
+    }
+
+    #[test]
+    fn raw_variants_skip_percent_decoding() {
+        // sealed endpoints carry the path verbatim inside the envelope:
+        // "100%20off" must NOT be decoded to "100 off" (plaintext routes do)
+        assert_eq!(safe_path_component("100%20off").as_deref(), Some("100 off"));
+        assert!(safe_path_component_raw("100%20off").is_none()); // '%' not whitelisted
+        assert_eq!(safe_path_component_raw("plain dir").as_deref(), Some("plain dir"));
+        let (d, real) = tmp_uploads("raw");
+        fs::write(d.join("100%20off.txt"), b"").unwrap();
+        assert!(download_lookup("100%20off.txt", &d, &real).is_none()); // decodes to "100 off.txt"
+        assert!(download_lookup_raw("100%20off.txt", &d, &real).is_none()); // '%' rejected verbatim
+        fs::write(d.join("plain.txt"), b"").unwrap();
+        assert!(download_lookup_raw("plain.txt", &d, &real).is_some());
+        assert!(download_lookup_raw("../plain.txt", &d, &real).is_none());
     }
 
     #[test]

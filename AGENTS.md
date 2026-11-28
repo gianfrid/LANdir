@@ -15,7 +15,7 @@ For complete project context, read README.md, ARCHITECTURE.md, and SPEC.md.
 ## Agent Guidelines
 
 - Always preserve the security rules listed in SPEC.md — they bind BOTH implementations
-- Keep `landir.py` and the Rust implementation (`src/`) interoperable: same endpoints and behavior — the aim is interoperability, not identical flags. `landir.py` is the reference — change it first with a test, then port to Rust with an equivalent test. Documented exception: `--url` is Rust-only (it corrects the advertised URL behind a container port mapping, which never applies to the others) — see SPEC.md and `docs/adr/0002-advertised-url-override.md`; do not "restore parity" by adding it elsewhere
+- Keep `landir.py` and the Rust implementation (`src/`) interoperable: same endpoints and behavior — the aim is interoperability, not identical flags. `landir.py` is the reference — change it first with a test, then port to Rust with an equivalent test. Documented exception: `--url` is Rust-only (it corrects the advertised URL behind a container port mapping, which never applies to the others) — see SPEC.md and `docs/adr/0002-advertised-url-override.md`; do not "restore parity" by adding it elsewhere. Encryption mode (sealed endpoints + host key, `--encrypt` on the CLI hosts) is implemented on all hosts with a byte-identical wire protocol — golden fixtures from `landir.py` are asserted by the Rust tests; see `docs/adr/0003-sealed-app-endpoints.md` and `docs/adr/0004-cli-encrypted-mode.md`
 - Python 3.7+ standard library only (landir.py); the Rust side uses crates (Cargo.lock pinned)
 - Run both test suites before delivering changes: `python3 -m unittest discover -s tests` and `cargo test`
 

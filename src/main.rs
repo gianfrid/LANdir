@@ -1,12 +1,21 @@
 //! LANdir - a simple LAN file upload server (Rust implementation).
 //!
 //! Usage:
-//!     landir [--port PORT] [--dir UPLOADS_DIR] [--insecure]
+//!     landir [--port PORT] [--dir UPLOADS_DIR] [--insecure | --encrypt]
+//!           [--max-upload BYTES]
 //!
 //! Defaults: port 8000, uploads in ./uploads, secret mode ON. Prints the URL
 //! to open from any device on the same network, rendered as a scannable QR
 //! code. By default the pages live under a random unguessable URL path;
 //! everything else 404s. Pass --insecure (-i) for plain /, /upload, ... URLs.
+//! Pass --encrypt for encrypted mode: no token, a long-term X25519 host key
+//! in the QR fragment (#k=...), and only the sealed endpoints (/supload,
+//! /sfiles, /sls, /sfl) answering — a LANdir app client is required to access
+//! it, since browsers cannot use encryption over plain HTTP (every plain
+//! route 404s).
+//! Pass --max-upload BYTES to reject uploads larger than BYTES with 413
+//! before their body is read (default: no limit — the request body is
+//! buffered in memory, so a cap bounds the memory an upload can cost).
 //! If the requested port is occupied — or --port 0 is given, which delegates
 //! the choice — a random high port (32768-60999) is used.
 //!
@@ -17,6 +26,7 @@
 //! could not be made to match the mapping.
 
 mod activity;
+mod crypto;
 mod listing;
 mod page;
 mod paths;
@@ -46,8 +56,18 @@ struct Cli {
     dir: PathBuf,
     /// Serve on plain /, /upload, ... URLs with no token (default is secret
     /// mode with a random URL path, included in the QR code)
-    #[arg(long, short = 'i')]
+    #[arg(long, short = 'i', conflicts_with = "encrypt")]
     insecure: bool,
+    /// Encrypted mode: no token, host key in the QR fragment (#k=...), only
+    /// the sealed endpoints (/supload, /sfiles, /sls, /sfl) answer — requires
+    /// a LANdir app client; browsers cannot use encryption over plain HTTP
+    #[arg(long, conflicts_with = "insecure")]
+    encrypt: bool,
+    /// Reject uploads larger than BYTES with 413, before the body is read
+    /// (default: no limit). In encrypted mode the limit applies to the
+    /// sealed upload payload
+    #[arg(long, value_name = "BYTES", default_value_t = 0)]
+    max_upload: u64,
     /// Origin to advertise in the printed URL and QR code, e.g.
     /// http://192.168.1.50:18080 (for a container port mapping). The token
     /// path is still appended. Defaults to http://<lan-ip>:<bound-port>
@@ -126,11 +146,15 @@ fn parse_origin(raw: &str) -> Result<String, String> {
     Ok(format!("{scheme}://{rest}"))
 }
 
+pub(crate) fn urandom_into(buf: &mut [u8]) {
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut f| f.read_exact(buf))
+        .expect("failed to read /dev/urandom");
+}
+
 fn urandom(n: usize) -> Vec<u8> {
     let mut buf = vec![0u8; n];
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(&mut buf))
-        .expect("failed to read /dev/urandom");
+    urandom_into(&mut buf);
     buf
 }
 
@@ -197,6 +221,18 @@ async fn bind_available(
     Err("could not find an available port after 100 attempts".to_string())
 }
 
+/// The URL printed at startup and encoded in the QR code. In encrypted mode
+/// the host key rides in the fragment: `http://ip:port/#k=<base64url(pubkey)>`
+/// (padding stripped). The fragment never crosses the wire; generic
+/// camera-scan browsers ignore it, the LANdir app pins it.
+fn advertised_url(origin: &str, page: &str, host_key: Option<&crypto::HostKey>) -> String {
+    let base = format!("{origin}{page}");
+    match host_key {
+        Some(hk) => format!("{base}#k={}", base64url(hk.public.as_bytes())),
+        None => base,
+    }
+}
+
 fn lan_ip() -> String {
     match std::net::UdpSocket::bind("0.0.0.0:0") {
         Ok(s) => match s.connect("8.8.8.8:80").and_then(|_| s.local_addr()) {
@@ -239,13 +275,28 @@ async fn main() {
     };
     let port = listener.local_addr().expect("local addr").port();
 
-    // 16 random bytes -> 22-char URL-safe token (~128 bits of entropy)
-    let token = if cli.insecure {
+    // 16 random bytes -> 22-char URL-safe token (~128 bits of entropy).
+    // Encrypted mode is key-only: no token is generated (the host key ships
+    // in the same QR and is strictly stronger), so every plaintext route 404s.
+    let token = if cli.insecure || cli.encrypt {
         None
     } else {
         Some(base64url(&urandom(16)))
     };
     let paths = paths::Paths::new(token.as_deref());
+
+    // Encrypted mode: load (or create and persist) the long-term host key.
+    let host_key = if cli.encrypt {
+        match crypto::load_or_create_host_key(&upload_dir) {
+            Ok(k) => Some(k),
+            Err(e) => {
+                eprintln!("error: cannot load/create the host key: {e}");
+                exit(1);
+            }
+        }
+    } else {
+        None
+    };
 
     let origin = match advertised_origin(cli.url.as_deref(), port) {
         Ok(o) => o,
@@ -256,7 +307,18 @@ async fn main() {
             exit(2)
         }
     };
-    let url = format!("{origin}{}", paths.page);
+    let mut url = advertised_url(&origin, &paths.page, host_key.as_ref());
+    if cli.encrypt && url.len() > 106 {
+        // Never truncate key material to fit the QR (versions 1-6 hold 106
+        // bytes): warn and fall back to the keyless URL — the app host's
+        // behavior. The app cannot pair from this QR; the printed URL still
+        // scans to an honest address.
+        eprintln!(
+            "warning: URL + host key exceeds the QR capacity (106 bytes); \
+             advertising the keyless URL instead — the app cannot pair from this QR"
+        );
+        url = format!("{origin}{}", paths.page);
+    }
 
     let state = Arc::new(server::AppState {
         upload_dir: upload_dir.clone(),
@@ -264,6 +326,9 @@ async fn main() {
         token,
         paths,
         activity: activity::ActivityLog::new(),
+        encrypted: cli.encrypt,
+        host_key,
+        max_upload_bytes: cli.max_upload,
     });
     let app = server::router(state.clone());
     // ConnectInfo lets the activity tracker see client IPs.
@@ -284,7 +349,7 @@ async fn main() {
                 .await
                 .expect("server error");
         });
-        let _ = tui::run(&state.activity, &url);
+        let _ = tui::run(&state.activity, &url, cli.encrypt);
         activity::set_plain_mode(true);
         // Quit must not truncate in-flight uploads (an aborted write would
         // leave a stale .landir_tmp_* behind): signal graceful shutdown and
@@ -298,6 +363,14 @@ async fn main() {
 
     // No TTY (container logs, pipes): plain filtered log lines.
     println!("Uploads directory: {}", upload_dir.display());
+    if cli.encrypt {
+        // Tell the host user how to reach an encrypted host: only a LANdir
+        // app client can — encryption is not possible in a browser over
+        // plain HTTP, so every plain-HTTP route answers 404.
+        println!("Encryption mode ON: a LANdir client (app) is required to access this host —");
+        println!("scan the QR code with the LANdir app. Browsers cannot use encryption over");
+        println!("plain HTTP; all plain-HTTP routes answer 404.");
+    }
     println!("Open {url}  (Ctrl+C to stop)");
     match qr::qr_terminal(&url) {
         Ok(q) => println!("{q}"),
@@ -494,6 +567,21 @@ mod tests {
             format!("{origin}/abc123/"),
             "http://192.168.1.50:18080/abc123/"
         );
+    }
+
+    #[test]
+    fn advertised_url_carries_host_key_fragment_when_encrypted() {
+        let host = crypto::host_key_from_seed([3u8; 32]);
+        let url = advertised_url("http://192.168.1.4:8000", "/", Some(&host));
+        let expected_k = base64url(host.public.as_bytes());
+        assert_eq!(url, format!("http://192.168.1.4:8000/#k={expected_k}"));
+        // keyless hosts get the plain URL, no fragment
+        assert_eq!(
+            advertised_url("http://192.168.1.4:8000", "/tok/", None),
+            "http://192.168.1.4:8000/tok/"
+        );
+        // a normal LAN URL + key fits the QR version cap (106 bytes)
+        assert!(url.len() <= 106, "url={url}");
     }
 }
 

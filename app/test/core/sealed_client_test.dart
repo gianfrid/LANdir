@@ -158,4 +158,36 @@ void main() {
     final files = await c.listDir('');
     expect(files.any((f) => f.name == 'plain.txt'), isTrue);
   });
+
+  test('a sealed 200 whose payload is not OK does not count as uploaded',
+      () async {
+    // A path-rewriting MITM could answer an upload with any authenticated
+    // 200 (e.g. by redirecting the request to another sealed endpoint whose
+    // host happily returns a listing). The client must check the response
+    // payload, not just status + authentication — the file would otherwise
+    // be silently dropped while the UI shows success.
+    final hijack = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => hijack.close(force: true));
+    final hijackClient =
+        LANdirClient('http://127.0.0.1:${hijack.port}/', hostKey: hostKey.publicKey);
+    addTearDown(hijackClient.close);
+    hijack.listen((req) async {
+      final body = <int>[];
+      await for (final chunk in req) {
+        body.addAll(chunk);
+      }
+      // answer with a sealed root-listing payload instead of the sealed 'OK'
+      final sealed = await sealResponse(
+          Uint8List.fromList(utf8.encode('[]')),
+          ephPublicKeyOf(Uint8List.fromList(body)),
+          hostKey);
+      req.response.statusCode = 200;
+      req.response.headers.set('Content-Type', 'application/octet-stream');
+      req.response.add(sealed);
+      await req.response.close();
+    });
+    final ok = await hijackClient.uploadFile(
+        'x.txt', Uint8List.fromList(utf8.encode('x')));
+    expect(ok, isFalse);
+  });
 }

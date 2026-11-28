@@ -256,4 +256,56 @@ void main() {
       await limited.stop();
     }
   });
+
+  test('cross-endpoint envelope splices are rejected (the path has no AAD)',
+      () async {
+    // The request path is not authenticated: a path-rewriting MITM can post
+    // a valid sealed envelope to a different sealed endpoint. Every splice
+    // must fail with a visible 4xx — a 200 would make the client believe a
+    // dropped upload succeeded (or save a listing as the downloaded file).
+    // The plaintext shapes are mutually incompatible, and sfiles enforces
+    // its documented empty plaintext, so nothing answers 200 for a
+    // redirected envelope.
+    Directory('$tmpDir/splicedir').createSync();
+    File('$tmpDir/splice-notes.txt').writeAsStringSync('my notes');
+
+    Future<(int, Uint8List)> postEnvelope(
+        String url, Uint8List envelope) async {
+      final req = await client.postUrl(Uri.parse(url));
+      req.headers.set('Content-Type', 'application/octet-stream');
+      req.contentLength = envelope.length;
+      req.add(envelope);
+      final res = await req.close();
+      final chunks = <int>[];
+      await for (final c in res) {
+        chunks.addAll(c);
+      }
+      return (res.statusCode, Uint8List.fromList(chunks));
+    }
+
+    const boundary = 'testboundary42';
+    final uploadPlain = Uint8List.fromList(utf8.encode('$boundary\r\n') +
+        multipartBody(boundary, 'splice-report.pdf', utf8.encode('x')));
+    final cases = <(String, String, Uint8List)>[
+      ('upload', '${base}supload', uploadPlain),
+      ('root-listing', '${base}sfiles', Uint8List(0)),
+      ('sub-listing', '${base}sls',
+          Uint8List.fromList(utf8.encode('splicedir'))),
+      ('download', '${base}sfl',
+          Uint8List.fromList(utf8.encode('splice-notes.txt'))),
+    ];
+    final targets = cases.map((c) => c.$2).toList();
+    for (final (name, intended, plain) in cases) {
+      final sealed = await sealToHost(plain, hostKey.publicKey);
+      for (final target in targets) {
+        final (status, _) = await postEnvelope(target, sealed.envelope);
+        if (target == intended) {
+          expect(status, 200, reason: '$name -> $target');
+        } else {
+          expect(status, anyOf(400, 404),
+              reason: '$name redirected to $target answered $status');
+        }
+      }
+    }
+  });
 }

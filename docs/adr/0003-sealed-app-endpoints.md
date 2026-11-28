@@ -68,3 +68,9 @@ badge; a pinned server is always sealed — never a silent fallback.
   design doc); the release APK signing story matters more once this ships.
 - **CLI hosts keep their plaintext + token model**, including their URLs and
   QRs, unchanged.
+
+> Update (ADR 0004): the CLI hosts (`landir.py`, Rust) later gained the same
+> encryption mode behind an opt-in `--encrypt` flag — sealed endpoints, `#k=`
+> fragment, blind-404 plaintext routes, byte-identical wire protocol. What
+> remains app-only is the client side (pinning, sealed client). See
+> [0004-cli-encrypted-mode.md](0004-cli-encrypted-mode.md).

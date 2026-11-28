@@ -1103,5 +1103,480 @@ class FindAvailablePortTest(unittest.TestCase):
             self.assertLessEqual(picked, 60999)
 
 
+# --------------------------------------------------------------------------
+# Sealed (encrypted) mode: pure-stdlib crypto vectors + the sealed endpoints.
+#
+# The golden fixture below is generated from landir.py itself with fixed
+# seeds/nonces (deterministic), so the Rust implementation asserts the very
+# same bytes — cross-implementation interop for the sealed wire format. Every
+# input (seeds, nonces, plaintexts) is listed in the fixture, so it is
+# self-describing: test_golden_envelopes regenerates the envelope bytes from
+# those inputs and compares.
+
+GOLDEN = {
+    "host_seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "eph_seed": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+    "req_nonce": "404142434445464748494a4b",
+    "resp_nonce": "4c4d4e4f5051525354555657",
+    "host_pub": "8f40c5adb68f25624ae5b214ea767a6ec94d829d3d7b5e1ad1ba6f3e2138285f",
+    "eph_pub": "358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd166254",
+    "plain_request": "474554202f7366696c6573207365616c65642d7265717565737420706c61696e74657874200001ff",
+    "plain_response": "4f4b",
+    "request_envelope": "4c358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd166254404142434445464748494a4ba50700f235613b0e9c31b428bdf931d3d8a49e1e61723c0b8953c0c93316a6bf92ff590ec93e4bc79ddde75311595449ee97ab76dc314ec3",
+    "response_envelope": "4c4c4d4e4f5051525354555657dd7a15c1f47c7d5f327d68b3c00a4190078e",
+}
+
+
+def _unhex(s):
+    return bytes.fromhex(s)
+
+
+class CryptoVectorTests(unittest.TestCase):
+    """RFC test vectors for the sealed-mode primitives (X25519 RFC 7748,
+    HKDF RFC 5869, ChaCha20-Poly1305 RFC 8439) plus the golden envelopes."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.key_dir = tempfile.TemporaryDirectory()
+        os.environ["LANDIR_KEY_DIR"] = cls.key_dir.name
+        cls.fds = load_server(["--dir", tempfile.mkdtemp(), "--encrypt"])
+
+    @classmethod
+    def tearDownClass(cls):
+        del os.environ["LANDIR_KEY_DIR"]
+        cls.key_dir.cleanup()
+
+    def test_x25519_rfc7748_vectors(self):
+        fds = self.fds
+        cases = [
+            ("a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4",
+             "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c",
+             "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552"),
+            ("4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d",
+             "e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493",
+             "95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957"),
+        ]
+        for scalar, u, expected in cases:
+            with self.subTest(scalar=scalar[:12]):
+                self.assertEqual(fds._x25519(_unhex(scalar), _unhex(u)).hex(),
+                                 expected)
+        # base-point multiplication
+        self.assertEqual(
+            fds._x25519_base(_unhex(
+                "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a"
+            )).hex(),
+            "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a")
+
+    def test_x25519_low_order_point_rejected(self):
+        # An all-zero result (low-order point, RFC 7748 §6.1) yields a known
+        # shared secret and must be rejected. u = 0, u = 1 and u = p-1 are
+        # genuine low-order points; a wrong-length key never reaches the
+        # ladder at all.
+        p_minus_1 = (2**255 - 20).to_bytes(32, "little")
+        for u in (bytes(32), (1).to_bytes(32, "little"), p_minus_1):
+            with self.subTest(u=u.hex()[:10]):
+                self.assertIsNone(self.fds._shared_secret(b"\x01" * 32, u))
+        # malformed input lengths are rejected before the ladder
+        self.assertIsNone(self.fds._shared_secret(b"\x01" * 32, b"\x05"))
+        self.assertIsNone(self.fds._shared_secret(b"\x01" * 32, b"\x05" * 33))
+
+    def test_hkdf_sha256_rfc5869_test_case_3(self):
+        # RFC 5869 A.3: SHA-256, zero-length salt and info — exactly the path
+        # the sealed envelopes use (empty salt = HashLen zero bytes). Both
+        # constants are the RFC's published values, so this anchors extract
+        # AND expand against an external reference.
+        import hashlib
+        import hmac as hmac_mod
+        fds = self.fds
+        ikm = b"\x0b" * 22
+        prk = hmac_mod.new(b"\x00" * 32, ikm, hashlib.sha256).digest()
+        self.assertEqual(prk.hex(),
+                         "19ef24a32c717b167f33a91d6f648bdf"
+                         "96596776afdb6377ac434c1c293ccb04")
+        self.assertEqual(fds._hkdf_sha256(ikm, b"", 42).hex(),
+                         "8da4e775a563c18f715f802a063c5a31"
+                         "b8a11f5c5ee1879ec3454e5f3c738d2d"
+                         "9d201395faa4b61a96c8")
+        # distinct info strings derive distinct keys (request vs response)
+        self.assertNotEqual(fds._hkdf_sha256(ikm, fds.HKDF_INFO_REQUEST),
+                            fds._hkdf_sha256(ikm, fds.HKDF_INFO_RESPONSE))
+
+    def test_chacha20_poly1305_rfc8439_vector(self):
+        fds = self.fds
+        key = bytes.fromhex(
+            "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f")
+        nonce = bytes.fromhex("070000004041424344454647")
+        aad = bytes.fromhex("50515253c0c1c2c3c4c5c6c7")
+        pt = (b"Ladies and Gentlemen of the class of '99: If I could offer "
+              b"you only one tip for the future, sunscreen would be it.")
+        ct, mac = fds._aead_encrypt(key, nonce, pt, aad)
+        self.assertEqual(ct.hex(),
+                         "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d6"
+                         "3dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3"
+                         "692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7"
+                         "bc3ff4def08e4b7a9de576d26586cec64b6116")
+        self.assertEqual(mac.hex(), "1ae10b594f09e26a7e902ecbd0600691")
+        self.assertEqual(fds._aead_decrypt(key, nonce, ct, mac, aad), pt)
+        # a flipped mac bit must fail authentication
+        bad_mac = mac[:-1] + bytes([mac[-1] ^ 1])
+        self.assertIsNone(fds._aead_decrypt(key, nonce, ct, bad_mac, aad))
+
+    def test_golden_envelopes(self):
+        # fixed seeds/nonces -> byte-identical envelopes across
+        # implementations (the Rust suite asserts the same hex)
+        fds = self.fds
+        host_seed = _unhex(GOLDEN["host_seed"])
+        eph_seed = _unhex(GOLDEN["eph_seed"])
+        host_pub = fds._x25519_base(host_seed)
+        self.assertEqual(host_pub.hex(), GOLDEN["host_pub"])
+        eph_pub = fds._x25519_base(eph_seed)
+        self.assertEqual(eph_pub.hex(), GOLDEN["eph_pub"])
+        env, used_eph = fds.seal_request(_unhex(GOLDEN["plain_request"]), host_pub,
+                                        eph_priv=eph_seed,
+                                        nonce=_unhex(GOLDEN["req_nonce"]))
+        self.assertEqual(used_eph, eph_seed)
+        self.assertEqual(env.hex(), GOLDEN["request_envelope"])
+        resp = fds.seal_response(_unhex(GOLDEN["plain_response"]), eph_pub,
+                                 host_seed, nonce=_unhex(GOLDEN["resp_nonce"]))
+        self.assertEqual(resp.hex(), GOLDEN["response_envelope"])
+        # and they open back
+        self.assertEqual(fds.open_request(_unhex(GOLDEN["request_envelope"]),
+                                         host_seed),
+                         _unhex(GOLDEN["plain_request"]))
+        self.assertEqual(fds.open_response(_unhex(GOLDEN["response_envelope"]),
+                                          eph_seed, host_pub),
+                         _unhex(GOLDEN["plain_response"]))
+
+    def test_envelope_round_trip_and_tamper(self):
+        fds = self.fds
+        host_seed = fds.HOST_KEY
+        host_pub = fds.host_public_key()
+        env, eph = fds.seal_request(b"round trip \x00\xff", host_pub)
+        self.assertEqual(fds.open_request(env, host_seed), b"round trip \x00\xff")
+        resp = fds.seal_response(b"pong", fds.eph_public_key_of(env), host_seed)
+        self.assertEqual(fds.open_response(resp, eph, host_pub), b"pong")
+        # tampered ciphertext / mac / header all fail
+        for pos in (0, 10, len(env) - 1):
+            bad = bytearray(env)
+            bad[pos] ^= 1
+            self.assertIsNone(fds.open_request(bytes(bad), host_seed),
+                              f"tamper at {pos} must fail")
+        # truncated / garbage
+        self.assertIsNone(fds.open_request(env[:-5], host_seed))
+        self.assertIsNone(fds.open_request(b"garbage", host_seed))
+        self.assertIsNone(fds.open_request(b"", host_seed))
+        # a different host key cannot open it
+        self.assertIsNone(fds.open_request(env, b"\x07" * 32))
+
+    def test_seal_request_rejects_low_order_host_key(self):
+        with self.assertRaises(ValueError):
+            self.fds.seal_request(b"x", bytes(32))  # all-zero pubkey
+
+    def test_host_key_persistence_and_corruption(self):
+        fds = self.fds
+        path = os.path.join(fds.host_key_dir(), fds.HOST_KEY_FILE)
+        with open(path, "rb") as fh:
+            first = fh.read()
+        self.assertEqual(len(first), 32)
+        self.assertEqual(fds.load_or_create_host_key(), first)  # stable
+        # corrupt file: regenerated, not crash-looped
+        with open(path, "wb") as fh:
+            fh.write(b"short")
+        second = fds.load_or_create_host_key()
+        self.assertEqual(len(second), 32)
+        self.assertNotEqual(second, b"short")
+        # permissions are owner-only
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+
+    def test_advertised_url_with_key(self):
+        fds = self.fds
+        url = fds.advertised_url_with_key("http://192.168.1.4:8000/")
+        self.assertIsNotNone(url)
+        self.assertTrue(url.startswith("http://192.168.1.4:8000/#k="))
+        import base64
+        k = url.split("#k=", 1)[1]
+        self.assertNotIn("=", k)  # padding stripped
+        decoded = base64.urlsafe_b64decode(k + "=" * (-len(k) % 4))
+        self.assertEqual(decoded, fds.host_public_key())
+        # fits the QR encoder's version cap
+        m = fds.qr_matrix(url)
+        self.assertLessEqual(len(m), 41)
+        # too long -> None (never truncate key material)
+        long_url = "http://" + "a" * 100 + ":8000/"
+        self.assertIsNone(fds.advertised_url_with_key(long_url))
+
+
+class EncryptedServerTests(ServerTestBase):
+    """--encrypt: only the sealed endpoints answer; every plaintext route
+    (page included) is a blind 404."""
+
+    secret = ("--encrypt",)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.key_dir = tempfile.TemporaryDirectory()
+        os.environ["LANDIR_KEY_DIR"] = cls.key_dir.name
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        del os.environ["LANDIR_KEY_DIR"]
+        cls.key_dir.cleanup()
+
+    def sealed_post(self, path, plaintext):
+        """POST a sealed request envelope; returns (status, opened plaintext
+        or raw body). The response must authenticate under the host key."""
+        fds = self.fds
+        env, eph = fds.seal_request(plaintext, fds.host_public_key())
+        resp = self.request("POST", path, env,
+                            {"Content-Type": "application/octet-stream"})
+        body = resp.read()
+        if resp.status == 200:
+            opened = fds.open_response(body, eph, fds.host_public_key())
+            self.assertIsNotNone(opened, "sealed response must authenticate")
+            return resp.status, opened
+        return resp.status, body
+
+    def sealed_upload(self, filename, content):
+        boundary = "testboundary42"
+        body, _ = multipart(filename, content)
+        st, opened = self.sealed_post(
+            "/supload", boundary.encode() + b"\r\n" + body)
+        self.assertEqual(st, 200)
+        self.assertEqual(opened, b"OK")
+
+    def test_plaintext_routes_are_blind_404(self):
+        for method, path in [("GET", "/"), ("GET", "/index.html"),
+                             ("GET", "/files"), ("GET", "/fl/x"),
+                             ("GET", "/ls/sub"), ("POST", "/upload"),
+                             ("POST", "/snope"), ("POST", "/sfilesx")]:
+            with self.subTest(method=method, path=path):
+                resp = self.request(method, path, b"" if method == "POST" else None)
+                self.assertEqual(resp.status, 404)
+                resp.read()
+
+    def test_sealed_upload_list_download_roundtrip(self):
+        self.sealed_upload("hello.txt", b"sealed hello")
+        self.assertEqual(self.read_saved("hello.txt"), b"sealed hello")
+
+        st, body = self.sealed_post("/sfiles", b"")
+        self.assertEqual(st, 200)
+        names = [it["name"] for it in json.loads(body)]
+        self.assertIn("hello.txt", names)
+
+        st, body = self.sealed_post("/sfl", b"hello.txt")
+        self.assertEqual(st, 200)
+        self.assertEqual(body, b"sealed hello")
+
+    def test_sealed_subdir_listing_and_download(self):
+        folder = os.path.join(self.upload_dir.name, "sub")
+        os.makedirs(folder)
+        with open(os.path.join(folder, "inner.txt"), "wb") as f:
+            f.write(b"inner content")
+        st, body = self.sealed_post("/sls", b"sub")
+        self.assertEqual(st, 200)
+        self.assertIn("inner.txt", body.decode())
+        st, body = self.sealed_post("/sfl", b"sub/inner.txt")
+        self.assertEqual(st, 200)
+        self.assertEqual(body, b"inner content")
+
+    def test_sealed_listing_hides_hidden_names(self):
+        with open(os.path.join(self.upload_dir.name, ".hidden.txt"), "wb") as f:
+            f.write(b"secret")
+        self.sealed_upload("shown.txt", b"data")
+        st, body = self.sealed_post("/sfiles", b"")
+        self.assertEqual(st, 200)
+        names = [it["name"] for it in json.loads(body)]
+        self.assertIn("shown.txt", names)
+        self.assertNotIn(".hidden.txt", names)
+
+    def test_sealed_traversal_still_lands_inside(self):
+        # SPEC rule 1 below the crypto layer: a traversal filename inside a
+        # sealed body is sanitized exactly like a plaintext one
+        self.sealed_upload("../../pwn", b"pwned")
+        self.assertIn("pwn", self.saved_files())
+        self.assertEqual(self.read_saved("pwn"), b"pwned")
+        # and traversal in sealed ls/fl paths is rejected
+        st, _ = self.sealed_post("/sfl", b"../landir.py")
+        self.assertEqual(st, 404)
+        st, _ = self.sealed_post("/sls", b"../../etc")
+        self.assertEqual(st, 404)
+        st, _ = self.sealed_post("/sfl", b".hidden")
+        self.assertEqual(st, 404)
+
+    def test_sealed_same_name_twice_keeps_both(self):
+        self.sealed_upload("doc.bin", b"version-1")
+        self.sealed_upload("doc.bin", b"version-2")
+        files = [f for f in self.saved_files() if f.startswith("doc")]
+        self.assertEqual(len(files), 2)
+        self.assertEqual(sorted(self.read_saved(f) for f in files),
+                         [b"version-1", b"version-2"])
+
+    def test_sealed_upload_without_file_400(self):
+        boundary = "testboundary42"
+        st, _ = self.sealed_post("/supload",
+                                 boundary.encode() + b"\r\n"
+                                 + b"--testboundary42--\r\n")
+        self.assertEqual(st, 400)
+
+    def test_sealed_upload_malformed_plaintext_400(self):
+        # no CRLF boundary line inside the sealed plaintext
+        st, _ = self.sealed_post("/supload", b"no boundary line here")
+        self.assertEqual(st, 400)
+
+    def test_sealed_bad_envelope_400(self):
+        # garbage, wrong version byte, truncated, and tampered envelopes
+        env, _ = self.fds.seal_request(b"x", self.fds.host_public_key())
+        cases = [b"garbage", b"", bytes([0x4d]) + env[1:], env[:-3]]
+        bad = bytearray(env)
+        bad[-1] ^= 1
+        cases.append(bytes(bad))
+        for payload in cases:
+            with self.subTest(payload=payload[:8].hex()):
+                resp = self.request("POST", "/sfiles", payload,
+                                    {"Content-Type": "application/octet-stream"})
+                self.assertEqual(resp.status, 400)
+                resp.read()
+
+    def test_sealed_bad_content_length_400(self):
+        for value in ("-5", "twelve"):
+            with self.subTest(cl=value):
+                resp = self.request("POST", "/sfiles", b"",
+                                    {"Content-Type": "application/octet-stream",
+                                     "Content-Length": value})
+                self.assertEqual(resp.status, 400)
+                resp.read()
+
+    def test_sealed_wrong_key_cannot_open(self):
+        # an envelope sealed to a different host key fails AEAD at this host
+        other_pub = self.fds._x25519_base(b"\x09" * 32)
+        env, _ = self.fds.seal_request(b"x", other_pub)
+        resp = self.request("POST", "/sfiles", env,
+                            {"Content-Type": "application/octet-stream"})
+        self.assertEqual(resp.status, 400)
+        resp.read()
+
+    def test_sealed_events_logged(self):
+        self.sealed_upload("evt.txt", b"abc")
+        self.sealed_post("/sfl", b"evt.txt")
+        events = [t for _, t in self.fds.ACTIVITY.events()]
+        self.assertTrue(any("uploaded evt.txt (3 B)" in e for e in events),
+                        events)
+        self.assertTrue(any("downloaded evt.txt (3 B)" in e for e in events),
+                        events)
+
+    def test_sealed_endpoint_splices_rejected(self):
+        # The endpoint is not authenticated (no AAD): a path-rewriting MITM
+        # can post a valid sealed envelope to a different sealed endpoint.
+        # Every cross-endpoint splice must fail with a visible 4xx — a 200
+        # would make the client believe a dropped upload succeeded (or save
+        # a listing as the downloaded file). The plaintext shapes are
+        # mutually incompatible, and sfiles enforces its documented empty
+        # plaintext, so nothing answers 200 for a redirected envelope.
+        fds = self.fds
+        host_pub = fds.host_public_key()
+        boundary = "testboundary42"
+        body, _ = multipart("splice-report.pdf", b"quarterly report")
+        upload_plain = boundary.encode() + b"\r\n" + body
+        with open(os.path.join(self.upload_dir.name, "splice-notes.txt"),
+                  "wb") as f:
+            f.write(b"my notes")
+        os.makedirs(os.path.join(self.upload_dir.name, "splicedir"),
+                    exist_ok=True)
+        requests = {
+            "upload": (fds.S_UPLOAD_PATH, upload_plain),
+            "root-listing": (fds.S_FILES_PATH, b""),
+            "sub-listing": (fds.S_LS_PATH, b"splicedir"),
+            "download": (fds.S_FL_PATH, b"splice-notes.txt"),
+        }
+        for name, (intended, plaintext) in requests.items():
+            for target in fds.SEALED_PATHS:
+                if target == intended:
+                    with self.subTest(name=name, target=target):
+                        env, _ = fds.seal_request(plaintext, host_pub)
+                        resp = self.request(
+                            "POST", target, env,
+                            {"Content-Type": "application/octet-stream"})
+                        self.assertEqual(resp.status, 200)
+                        resp.read()
+                    continue
+                with self.subTest(name=name, redirected_to=target):
+                    env, _ = fds.seal_request(plaintext, host_pub)
+                    resp = self.request(
+                        "POST", target, env,
+                        {"Content-Type": "application/octet-stream"})
+                    self.assertIn(resp.status, (400, 404),
+                                   f"{name} redirected to {target} answered "
+                                   f"{resp.status}")
+                    resp.read()
+
+    def test_no_token_in_encrypted_mode(self):
+        self.assertTrue(self.fds.ENCRYPTED)
+        self.assertIsNone(self.fds.SECRET_TOKEN)
+        self.assertEqual(self.fds.PAGE_PATH, "/")
+
+
+class MaxUploadServerTests(ServerTestBase):
+    """--max-upload: oversized uploads are rejected with 413 before their
+    body is read or saved (the OOM vector — the body is buffered in memory
+    otherwise, ~4x its size in transient copies)."""
+
+    secret = ("--insecure", "--max-upload", "1000")
+
+    def test_under_limit_upload_ok(self):
+        self.upload_ok("/upload", "small.txt", b"x" * 200)
+        self.assertEqual(self.read_saved("small.txt"), b"x" * 200)
+
+    def test_over_limit_upload_413_not_saved(self):
+        body, ctype = multipart("big.bin", b"x" * 2000)
+        resp = self.post_upload("/upload", body, ctype)
+        self.assertEqual(resp.status, 413)
+        resp.read()
+        self.assertNotIn("big.bin", self.saved_files())
+
+    def test_oversized_rejected_before_the_body_is_read(self):
+        # The 413 must come from the Content-Length header alone: a server
+        # that reads first would block for its whole 60 s timeout and buffer
+        # the promised body.
+        s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
+        try:
+            s.sendall(b"POST /upload HTTP/1.1\r\nHost: x\r\n"
+                      b"Content-Type: multipart/form-data; boundary=B\r\n"
+                      b"Content-Length: 100000000\r\n\r\n"
+                      b"--B\r\n")  # a sliver of the promised body
+            data = s.recv(1024)  # answers within seconds, not the timeout
+        finally:
+            s.close()
+        self.assertIn(b"413", data)
+        # and nothing landed in the uploads dir
+        self.assertEqual(self.saved_files(), [])
+
+
+class MaxUploadEncryptedServerTests(EncryptedServerTests):
+    """The same sealed surface under a --max-upload cap: the inherited
+    small-payload tests re-run under the limit, and the oversize cases below
+    prove a sealed upload is rejected before its envelope is buffered."""
+
+    secret = ("--encrypt", "--max-upload", "1000")
+
+    def test_sealed_over_limit_413_not_saved(self):
+        fds = self.fds
+        boundary = "testboundary42"
+        body, _ = multipart("big.bin", b"x" * 2000)
+        st, resp = self.sealed_post(
+            "/supload", boundary.encode() + b"\r\n" + body)
+        self.assertEqual(st, 413)
+        self.assertNotIn("big.bin", self.saved_files())
+
+    def test_sealed_just_under_limit_ok(self):
+        boundary = "testboundary42"
+        body, _ = multipart("edge.bin", b"y" * 800)  # + framing < 1000
+        st, opened = self.sealed_post(
+            "/supload", boundary.encode() + b"\r\n" + body)
+        self.assertEqual(st, 200)
+        self.assertEqual(opened, b"OK")
+        self.assertEqual(self.read_saved("edge.bin"), b"y" * 800)
+
 if __name__ == "__main__":
     unittest.main()

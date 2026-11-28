@@ -6,7 +6,7 @@ onto it — from a plain web browser, no app install required — and download
 them again. Files land in a local directory (on phones, in the native Files
 app).
 
-> **Warning: LAN-only tool.** Secret mode is on by default (random token URL); pass `--insecure` only on a trusted LAN. There is no upload size limit. Never expose it to the internet — bind it to your local network only.
+> **Warning: LAN-only tool.** Secret mode is on by default (random token URL); pass `--insecure` only on a trusted LAN. There is no upload size limit by default (pass `--max-upload BYTES` to reject larger uploads with 413). Never expose it to the internet — bind it to your local network only.
 
 ## Scope
 
@@ -31,7 +31,7 @@ use it.
 
 ## Layout
 
-- `landir.py` — single-file, zero-dependency Python application (server, HTML page, upload handling, QR code encoder/renderer). Reference implementation; must run on a bare python3.
+- `landir.py` — single-file, zero-dependency Python application (server, HTML page, upload handling, QR code encoder/renderer, pure-stdlib sealed-mode crypto). Reference implementation; must run on a bare python3.
 - `src/` + `Cargo.toml` — Rust implementation (axum/tokio). Same CLI and endpoints; distributed as a container image, so crates are fine here.
 - `app/` — Flutter app (Android, iOS, Linux desktop). Hosts the drop server on the phone and acts as a client to any LANdir server. Pure-Dart core in `app/lib/src/core/` is tested against golden vectors from `landir.py`. See [ARCHITECTURE.md](ARCHITECTURE.md) and [ADR 0001](docs/adr/0001-flutter-multiplatform.md).
 - `tests/test_landir.py` — stdlib-unittest suite for the Python version (no dependencies).
@@ -40,7 +40,7 @@ use it.
 ## Running
 
 ```bash
-python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure]
+python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure | --encrypt]
 # defaults: port 8000, uploads in ./uploads, secret mode ON
 ```
 
@@ -50,7 +50,11 @@ On an interactive terminal the server shows a full-screen view instead: the QR c
 
 Secret mode is the default: the page and upload endpoint live under a fresh random token path (`/<token>/`, `/<token>/upload`) and every other path returns 404; the QR code encodes the full secret URL. Pass `--insecure` (`-i`) to serve on plain `/`, `/upload`, ... URLs instead.
 
-Python 3.7+ standard library only. No packaging, no install step, no config files. Do not introduce dependencies without an explicit request.
+Uploads are unlimited by default (dropping big files is the point). The whole request body is buffered in memory before parsing, so if you run `--insecure` on a shared/hostile LAN — or simply want a bound on per-request memory — pass `--max-upload BYTES`: both CLI implementations then reject any larger upload with `413` **before reading its body** (plaintext mode: on the `Content-Length` header; encrypted mode: on the wire size of the sealed envelope, which is exactly its plaintext plus 61 bytes). It does not bound total disk usage — an authorized uploader can still fill the disk with many small files.
+
+**Encrypted mode** (`--encrypt`, both CLI implementations; mutually exclusive with `--insecure`): instead of a token, the host generates a long-term X25519 host key (persisted outside the uploads dir — `$LANDIR_KEY_DIR`, else `$XDG_CONFIG_HOME/landir` or `~/.config/landir`, else a `.landir/` dir next to the uploads dir) and advertises it in the QR fragment: `http://<ip>:<port>/#k=<key>`. Only the sealed endpoints answer then — `POST /supload`, `/sfiles`, `/sls`, `/sfl` — and every plaintext route (page included) is a blind 404, so files are neither readable nor writable without the key. **A LANdir client (the app) is required to access an encrypted host** — scan the QR with the app; the startup output says so explicitly. **Encryption is not possible in a browser over plain HTTP** (nothing in the web platform authenticates first-load JS), so browsers only get 404s from an encrypted host. The wire protocol (X25519 ‖ HKDF-SHA256 ‖ ChaCha20-Poly1305 sealed envelopes) is identical across `landir.py`, the Rust binary, and the app — see [ADR 0003](docs/adr/0003-sealed-app-endpoints.md), [ADR 0004](docs/adr/0004-cli-encrypted-mode.md), and [the design doc](docs/design/001-qr-paired-app-encryption.md). Unlike the app (encryption toggle default on), the CLI hosts default it **off** so the browser flow keeps working out of the box.
+
+Python 3.7+ standard library only. No packaging, no install step, no config files (the only env var is `LANDIR_KEY_DIR`, which picks where the `--encrypt` host key is persisted). Do not introduce dependencies without an explicit request.
 
 ## Running in a container
 
@@ -156,18 +160,21 @@ and client (role #2) for Android, iOS, and Linux desktop. The security-critical
 core (`app/lib/src/core/`) is pure Dart, tested against golden vectors exported
 from `landir.py` via `scripts/export_golden.py`.
 
-**App = secure path; browser = documented plaintext.** The app host has an
-**encryption mode** (default on, toggleable in the host view). With it on, the
-QR carries a long-term X25519 host key (`#k=`) and nothing else gates access —
-no request token, no Secret URL mode: only the app can connect, and files are
-not readable — or writable — without the key (every plaintext route answers
-404; see
-[docs/design/001-qr-paired-app-encryption.md](docs/design/001-qr-paired-app-encryption.md)
-and [ADR 0003](docs/adr/0003-sealed-app-endpoints.md)). Turn the mode off and
-the host becomes a keyless plaintext server like the CLI implementations —
-anyone with the URL, browsers included, can connect, and Secret URL mode
-controls the token path again. CLI hosts (`landir.py`, Rust) have no key and
-always serve that plaintext contract.
+**App = secure path; browser = documented plaintext.** Every host has an
+**encryption mode**: in the app it is a persisted toggle (default on); on the
+CLI hosts (`landir.py`, Rust) it is the opt-in `--encrypt` flag (default off).
+With it on, the QR carries a long-term X25519 host key (`#k=`) and nothing
+else gates access — no request token, no Secret URL mode: only a LANdir app
+client can connect (the host's startup output says so), and files are not
+readable — or writable — without the key (every plaintext route answers 404;
+see
+[docs/design/001-qr-paired-app-encryption.md](docs/design/001-qr-paired-app-encryption.md),
+[ADR 0003](docs/adr/0003-sealed-app-endpoints.md) and
+[ADR 0004](docs/adr/0004-cli-encrypted-mode.md)). Browsers cannot use
+encrypted mode at all — encryption is not possible in a browser over plain
+HTTP — so with the mode on a browser only sees 404s. Turn the mode off and the
+host becomes a keyless plaintext server — anyone with the URL, browsers
+included, can connect, and Secret URL mode controls the token path again.
 
 ```bash
 cd app

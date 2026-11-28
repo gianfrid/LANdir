@@ -2,7 +2,8 @@
 """LANdir - a simple LAN file upload server.
 
 Usage:
-    python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure]
+    python3 landir.py [--port PORT] [--dir UPLOADS_DIR] [--insecure | --encrypt]
+                      [--max-upload BYTES]
 
 Defaults: port 8000, uploads in ./uploads next to the script, secret mode ON.
 At startup the server prints the address to open from any device on the
@@ -10,11 +11,21 @@ same network (e.g. an Android phone), rendered as a scannable QR code.
 By default the pages live under a random unguessable URL path; the QR code
 encodes that full path, and requests to any other path get a 404.
 Pass --insecure (-i) to serve on plain /, /upload, ... URLs instead.
+Pass --encrypt for encrypted mode: no token, a long-term X25519 host key in
+the QR fragment (#k=...), and only the sealed endpoints (/supload, /sfiles,
+/sls, /sfl) answering — a LANdir app client is required to access it, since
+browsers cannot use encryption over plain HTTP (every plain route 404s).
 If the requested port is occupied, or --port 0 is given, a random high
 port (32768-60999) is used instead.
+Pass --max-upload BYTES to reject uploads larger than BYTES with 413 before
+their body is read (default: no limit — the request body is buffered in
+memory, so a cap bounds the memory an upload can cost).
 """
 
 import argparse
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -32,22 +43,40 @@ from urllib.parse import unquote
 def _parse_args():
     parser = argparse.ArgumentParser(
         description="LAN file upload server",
-        usage="%(prog)s [--port PORT] [--dir UPLOADS_DIR] [--insecure]")
+        usage="%(prog)s [--port PORT] [--dir UPLOADS_DIR] [--insecure | --encrypt]")
     parser.add_argument("--port", type=int, default=8000,
                         help="port to listen on (default: 8000; 0 or an "
                              "occupied port falls back to a random high port)")
     parser.add_argument("--dir", metavar="UPLOADS_DIR", default="uploads",
                         help="directory where uploaded files are stored "
                              "(default: ./uploads)")
-    parser.add_argument("--insecure", "-i", action="store_true",
-                        help="serve on plain /, /upload, ... URLs with no "
-                             "token (default is secret mode with a random "
-                             "URL path, included in the printed QR code)")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--insecure", "-i", action="store_true",
+                      help="serve on plain /, /upload, ... URLs with no "
+                           "token (default is secret mode with a random "
+                           "URL path, included in the printed QR code)")
+    mode.add_argument("--encrypt", action="store_true",
+                      help="encrypted mode: no token, host key in the QR "
+                           "fragment (#k=...), only the sealed endpoints "
+                           "(/supload, /sfiles, /sls, /sfl) answer — requires "
+                           "a LANdir app client; browsers cannot use it")
+    parser.add_argument("--max-upload", metavar="BYTES", type=int, default=0,
+                        help="reject uploads larger than BYTES with 413, "
+                             "before the body is read (default: no limit). "
+                             "In encrypted mode the limit applies to the "
+                             "sealed upload payload")
     return parser.parse_args()
 
 
 ARGS = _parse_args()
 UPLOAD_DIR = os.path.abspath(ARGS.dir)
+ENCRYPTED = ARGS.encrypt
+# Upload size cap (app parity: the Flutter host's maxUploadBytes). 0 = no
+# limit, the documented default — LAN-only tool, dropping big files is the
+# point. The cap exists for the OOM vector: the request body is buffered in
+# memory before parsing (~4x its size in transient copies), so an oversized
+# upload can kill the process for every user, not just the sender.
+MAX_UPLOAD_BYTES = ARGS.max_upload if ARGS.max_upload > 0 else 0
 
 
 def _find_available_port(start_port):
@@ -80,13 +109,25 @@ def _find_available_port(start_port):
 
 
 PORT = _find_available_port(ARGS.port)
-# token_urlsafe() is URL-path-safe and ~128 bits of entropy
-SECRET_TOKEN = None if ARGS.insecure else secrets.token_urlsafe(16)
+# token_urlsafe() is URL-path-safe and ~128 bits of entropy.
+# Encrypted mode is key-only: no token is generated (the key ships in the
+# same QR and is strictly stronger), so every plaintext route can 404.
+SECRET_TOKEN = None if (ARGS.insecure or ARGS.encrypt) else secrets.token_urlsafe(16)
 PAGE_PATH = f"/{SECRET_TOKEN}/" if SECRET_TOKEN else "/"
 UPLOAD_PATH = f"/{SECRET_TOKEN}/upload" if SECRET_TOKEN else "/upload"
 FILES_PATH = f"{PAGE_PATH}files"          # JSON listing of the uploads dir
 FILE_DOWNLOAD_PREFIX = f"{PAGE_PATH}fl/"  # download one file by name
 FILES_LIST_PREFIX = f"{PAGE_PATH}ls/"   # list directory contents (optional path)
+
+# Sealed endpoints (encrypted mode, fixed root paths — no token, see
+# docs/adr/0003-sealed-app-endpoints.md and docs/adr/0004-cli-encrypted-mode.md).
+# All POST with body = request envelope ('L' ‖ ephPub ‖ nonce ‖ ct‖mac);
+# the answer is a response envelope ('L' ‖ nonce ‖ ct‖mac).
+S_UPLOAD_PATH = "/supload"  # plaintext = boundary "\r\n" + multipart body
+S_FILES_PATH = "/sfiles"    # plaintext = empty          -> sealed JSON listing
+S_LS_PATH = "/sls"          # plaintext = UTF-8 dir path -> sealed JSON listing
+S_FL_PATH = "/sfl"          # plaintext = UTF-8 file path -> sealed file bytes
+SEALED_PATHS = (S_UPLOAD_PATH, S_FILES_PATH, S_LS_PATH, S_FL_PATH)
 
 
 # --- Client activity tracking -------------------------------------------------
@@ -159,6 +200,324 @@ def emit_event(text):
         stamp = datetime.now().strftime("%H:%M:%S")
         sys.stderr.write("[%s] %s\n" % (stamp, text))
         sys.stderr.flush()
+
+
+# --- Sealed (encrypted) mode -------------------------------------------------
+# Pure-stdlib implementation of the sealed protocol shared with the Flutter
+# app (docs/design/001-qr-paired-app-encryption.md): Noise-N one-way shape,
+# fixed ciphersuite X25519 ‖ HKDF-SHA256 ‖ ChaCha20-Poly1305, fresh random
+# nonce per record, no agility.
+#
+#   request envelope  (client -> host): 'L' ‖ ephPub(32) ‖ nonce(12) ‖ ct‖mac
+#   response envelope (host -> client): 'L' ‖ nonce(12) ‖ ct‖mac
+#
+# Both directions use the same DH secret but distinct HKDF info strings.
+
+SEAL_VERSION = 0x4C  # 'L'
+SEAL_HEADER_LEN = 1 + 32 + 12  # version ‖ ephPub ‖ nonce (request envelope)
+SEAL_MAC_LEN = 16
+SEAL_ENVELOPE_OVERHEAD = SEAL_HEADER_LEN + SEAL_MAC_LEN  # a request envelope
+# is exactly its plaintext plus this many bytes, so an upload size can be
+# checked on the wire size alone, before decryption
+HKDF_INFO_REQUEST = b"landir-sealed-v1-request"
+HKDF_INFO_RESPONSE = b"landir-sealed-v1-response"
+QR_MAX_URL_BYTES = 106  # byte-mode payload of QR versions 1-6, EC level M
+
+_X25519_P = 2**255 - 19
+_X25519_BASE = (9).to_bytes(32, "little")
+
+
+def _x25519(scalar: bytes, u: bytes) -> bytes:
+    """RFC 7748 X25519: clamp scalar, Montgomery ladder over the u-coordinate."""
+    k = bytearray(scalar)
+    k[0] &= 248
+    k[31] &= 127
+    k[31] |= 64
+    k = int.from_bytes(bytes(k), "little")
+    p = _X25519_P
+    x1 = int.from_bytes(u, "little") & ((1 << 255) - 1)
+    x2, z2, x3, z3, swap = 1, 0, x1, 1, 0
+    a24 = 121665
+    for t in range(254, -1, -1):
+        kt = (k >> t) & 1
+        swap ^= kt
+        if swap:
+            x2, x3 = x3, x2
+            z2, z3 = z3, z2
+        swap = kt
+        a = (x2 + z2) % p
+        aa = a * a % p
+        b = (x2 - z2) % p
+        bb = b * b % p
+        e = (aa - bb) % p
+        c = (x3 + z3) % p
+        d = (x3 - z3) % p
+        da = d * a % p
+        cb = c * b % p
+        x3 = (da + cb) % p
+        x3 = x3 * x3 % p
+        z3 = (da - cb) % p
+        z3 = z3 * z3 % p * x1 % p
+        x2 = aa * bb % p
+        z2 = e * (aa + a24 * e) % p
+    if swap:
+        x2, x3 = x3, x2
+        z2, z3 = z3, z2
+    return (x2 * pow(z2, p - 2, p) % p).to_bytes(32, "little")
+
+
+def _x25519_base(scalar: bytes) -> bytes:
+    return _x25519(scalar, _X25519_BASE)
+
+
+def _shared_secret(priv: bytes, peer_pub: bytes):
+    """X25519 with the RFC 7748 §6.1 contributory check: an all-zero result
+    (low-order / decoy point) yields None instead of a known shared secret."""
+    if len(peer_pub) != 32:
+        return None
+    dh = _x25519(priv, peer_pub)
+    if dh == b"\x00" * 32:
+        return None
+    return dh
+
+
+def _hkdf_sha256(ikm: bytes, info: bytes, length: int = 32) -> bytes:
+    """RFC 5869 HKDF with SHA-256; an empty salt is HashLen zero bytes."""
+    prk = hmac.new(b"\x00" * hashlib.sha256().digest_size, ikm,
+                   hashlib.sha256).digest()
+    okm = b""
+    t = b""
+    counter = 1
+    while len(okm) < length:
+        t = hmac.new(prk, t + info + bytes([counter]), hashlib.sha256).digest()
+        okm += t
+        counter += 1
+    return okm[:length]
+
+
+def _chacha20_block(key: bytes, counter: int, nonce: bytes) -> bytes:
+    """One 64-byte RFC 8439 ChaCha20 block."""
+    m = 0xFFFFFFFF
+    x = [
+        0x61707865, 0x3320646E, 0x79622D32, 0x6B206574,
+        int.from_bytes(key[0:4], "little"), int.from_bytes(key[4:8], "little"),
+        int.from_bytes(key[8:12], "little"), int.from_bytes(key[12:16], "little"),
+        int.from_bytes(key[16:20], "little"), int.from_bytes(key[20:24], "little"),
+        int.from_bytes(key[24:28], "little"), int.from_bytes(key[28:32], "little"),
+        counter,
+        int.from_bytes(nonce[0:4], "little"), int.from_bytes(nonce[4:8], "little"),
+        int.from_bytes(nonce[8:12], "little"),
+    ]
+    s = x[:]
+
+    def qr(a, b, c, d):
+        x[a] = (x[a] + x[b]) & m
+        x[d] = ((x[d] ^ x[a]) << 16 | (x[d] ^ x[a]) >> 16) & m
+        x[c] = (x[c] + x[d]) & m
+        x[b] = ((x[b] ^ x[c]) << 12 | (x[b] ^ x[c]) >> 20) & m
+        x[a] = (x[a] + x[b]) & m
+        x[d] = ((x[d] ^ x[a]) << 8 | (x[d] ^ x[a]) >> 24) & m
+        x[c] = (x[c] + x[d]) & m
+        x[b] = ((x[b] ^ x[c]) << 7 | (x[b] ^ x[c]) >> 25) & m
+
+    for _ in range(10):
+        qr(0, 4, 8, 12)
+        qr(1, 5, 9, 13)
+        qr(2, 6, 10, 14)
+        qr(3, 7, 11, 15)
+        qr(0, 5, 10, 15)
+        qr(1, 6, 11, 12)
+        qr(2, 7, 8, 13)
+        qr(3, 4, 9, 14)
+    return b"".join(((x[i] + s[i]) & m).to_bytes(4, "little") for i in range(16))
+
+
+def _chacha20_xor(key: bytes, nonce: bytes, data: bytes, counter: int) -> bytes:
+    out = bytearray()
+    for off in range(0, len(data), 64):
+        block = _chacha20_block(key, counter, nonce)
+        counter = (counter + 1) & 0xFFFFFFFF
+        chunk = data[off:off + 64]
+        out.extend(bytes(a ^ b for a, b in zip(chunk, block)))
+    return bytes(out)
+
+
+def _poly1305(msg: bytes, key: bytes) -> bytes:
+    r = int.from_bytes(key[:16], "little") & 0x0FFFFFFC0FFFFFFC0FFFFFFC0FFFFFFF
+    s = int.from_bytes(key[16:32], "little")
+    p = (1 << 130) - 5
+    acc = 0
+    for off in range(0, len(msg), 16):
+        block = msg[off:off + 16]
+        n = int.from_bytes(block, "little") | (1 << (8 * len(block)))
+        acc = ((acc + n) * r) % p
+    return ((acc + s) & ((1 << 128) - 1)).to_bytes(16, "little")
+
+
+def _pad16(n: int) -> int:
+    return (16 - n % 16) % 16
+
+
+def _aead_encrypt(key: bytes, nonce: bytes, plaintext: bytes, aad: bytes = b""):
+    """RFC 8439 ChaCha20-Poly1305; returns (ciphertext, 16-byte mac)."""
+    otk = _chacha20_block(key, 0, nonce)[:32]
+    ct = _chacha20_xor(key, nonce, plaintext, 1)
+    mac_data = (aad + b"\x00" * _pad16(len(aad)) + ct + b"\x00" * _pad16(len(ct))
+                + len(aad).to_bytes(8, "little") + len(ct).to_bytes(8, "little"))
+    return ct, _poly1305(mac_data, otk)
+
+
+def _aead_decrypt(key: bytes, nonce: bytes, ct: bytes, mac: bytes, aad: bytes = b""):
+    """Returns the plaintext, or None when the mac does not verify."""
+    otk = _chacha20_block(key, 0, nonce)[:32]
+    mac_data = (aad + b"\x00" * _pad16(len(aad)) + ct + b"\x00" * _pad16(len(ct))
+                + len(aad).to_bytes(8, "little") + len(ct).to_bytes(8, "little"))
+    if not hmac.compare_digest(_poly1305(mac_data, otk), mac):
+        return None
+    return _chacha20_xor(key, nonce, ct, 1)
+
+
+def seal_request(plaintext: bytes, host_pub: bytes, eph_priv: bytes = None,
+                 nonce: bytes = None):
+    """Client side: seal [plaintext] to the pinned host key.
+
+    Returns (envelope, eph_priv) — the caller needs the ephemeral key to
+    open the matching response. eph_priv/nonce are injectable for tests.
+    """
+    if eph_priv is None:
+        eph_priv = secrets.token_bytes(32)
+    if len(eph_priv) != 32:
+        raise ValueError("ephemeral seed must be 32 bytes")
+    eph_pub = _x25519_base(eph_priv)
+    dh = _shared_secret(eph_priv, host_pub)
+    # The pinned host key is a low-order point: there is no honest key
+    # exchange to have. Fail loudly — never fall back to plaintext.
+    if dh is None:
+        raise ValueError("pinned host key is a low-order point")
+    key = _hkdf_sha256(dh, HKDF_INFO_REQUEST)
+    if nonce is None:
+        nonce = secrets.token_bytes(12)
+    ct, mac = _aead_encrypt(key, nonce, plaintext)
+    return bytes([SEAL_VERSION]) + eph_pub + nonce + ct + mac, eph_priv
+
+
+def open_request(envelope: bytes, host_priv: bytes):
+    """Host side: open a request envelope. Returns the plaintext, or None
+    when the envelope is malformed or the AEAD check fails (garbage/replay)."""
+    if len(envelope) < SEAL_HEADER_LEN + SEAL_MAC_LEN or envelope[0] != SEAL_VERSION:
+        return None
+    eph_pub = envelope[1:33]
+    nonce = envelope[33:45]
+    ct = envelope[45:-SEAL_MAC_LEN]
+    mac = envelope[-SEAL_MAC_LEN:]
+    dh = _shared_secret(host_priv, eph_pub)
+    if dh is None:
+        return None  # low-order ephemeral: reject the envelope
+    key = _hkdf_sha256(dh, HKDF_INFO_REQUEST)
+    return _aead_decrypt(key, nonce, ct, mac)
+
+
+def seal_response(plaintext: bytes, eph_pub: bytes, host_priv: bytes,
+                  nonce: bytes = None) -> bytes:
+    """Host side: seal a response to the ephemeral key of the request."""
+    dh = _shared_secret(host_priv, eph_pub)
+    # Unreachable when called after open_request accepted the envelope (which
+    # already rejects low-order ephemerals); fail loudly rather than seal
+    # under a zero secret.
+    if dh is None:
+        raise ValueError("low-order ephemeral in a valid envelope")
+    key = _hkdf_sha256(dh, HKDF_INFO_RESPONSE)
+    if nonce is None:
+        nonce = secrets.token_bytes(12)
+    ct, mac = _aead_encrypt(key, nonce, plaintext)
+    return bytes([SEAL_VERSION]) + nonce + ct + mac
+
+
+def open_response(envelope: bytes, eph_priv: bytes, host_pub: bytes):
+    """Client side: open a response envelope with the ephemeral key pair used
+    for the request and the pinned host key. None on AEAD failure."""
+    if len(envelope) < 1 + 12 + SEAL_MAC_LEN or envelope[0] != SEAL_VERSION:
+        return None
+    nonce = envelope[1:13]
+    ct = envelope[13:-SEAL_MAC_LEN]
+    mac = envelope[-SEAL_MAC_LEN:]
+    dh = _shared_secret(eph_priv, host_pub)
+    if dh is None:
+        return None
+    key = _hkdf_sha256(dh, HKDF_INFO_RESPONSE)
+    return _aead_decrypt(key, nonce, ct, mac)
+
+
+def eph_public_key_of(envelope: bytes) -> bytes:
+    """The ephemeral public key from a request envelope (host side)."""
+    return envelope[1:33]
+
+
+# --- Host key (the long-term X25519 identity of this host) -------------------
+# Persisted outside uploads/ (never served) so the key survives restarts and
+# app clients can pin it. Location: $LANDIR_KEY_DIR, else $XDG_CONFIG_HOME/landir,
+# else ~/.config/landir, else a .landir/ dir next to the uploads dir (the
+# fallback covers containers running without HOME).
+
+HOST_KEY_FILE = "host_key.bin"
+
+
+def host_key_dir() -> str:
+    env = os.environ.get("LANDIR_KEY_DIR")
+    if env:
+        return env
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return os.path.join(xdg, "landir")
+    home = os.environ.get("HOME")
+    if home:
+        return os.path.join(home, ".config", "landir")
+    return os.path.join(os.path.dirname(UPLOAD_DIR) or ".", ".landir")
+
+
+def load_or_create_host_key() -> bytes:
+    """Load the persisted 32-byte X25519 seed, creating and persisting one on
+    first run. A corrupt/truncated file is regenerated, not crash-looped."""
+    path = os.path.join(host_key_dir(), HOST_KEY_FILE)
+    for _ in range(2):
+        try:
+            with open(path, "rb") as fh:
+                seed = fh.read()
+            if len(seed) == 32:
+                return seed
+            os.unlink(path)  # corrupt/truncated: regenerate below
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        seed = secrets.token_bytes(32)
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            continue  # lost a creation race: read the winner's key next pass
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(seed)
+        return seed
+    raise RuntimeError(f"cannot establish a host key at {path}")
+
+
+HOST_KEY = load_or_create_host_key() if ENCRYPTED else None
+
+
+def host_public_key() -> bytes:
+    return _x25519_base(HOST_KEY)
+
+
+def advertised_url_with_key(url: str):
+    """Append the host key fragment: .../#k=<base64url(pubkey)>, padding
+    stripped. Returns None when the URL would exceed the QR capacity — the
+    caller must warn rather than truncate key material."""
+    k = base64.urlsafe_b64encode(host_public_key()).rstrip(b"=").decode("ascii")
+    url = f"{url}#k={k}"
+    if len(url.encode("utf-8")) > QR_MAX_URL_BYTES:
+        return None
+    return url
 
 
 # --- Minimal QR code encoder (byte mode, EC level M, versions 1-6) ----------
@@ -834,12 +1193,17 @@ def _inside_uploads(path: str) -> bool:
     return os.path.commonpath([os.path.realpath(path), real]) == real
 
 
-def _safe_path_component(name: str) -> str:
+def _safe_path_component(name: str, decode: bool = True) -> str:
     """Sanitize a single path component (filename or directory name).
-    
-    Returns sanitized name or empty string if invalid.
+
+    Returns sanitized name or empty string if invalid. With decode=False the
+    name is taken verbatim (no percent-decoding) — the sealed endpoints carry
+    the path inside the encrypted envelope, not URL-encoded on the wire, so a
+    real folder named "100%20off" must not be mangled to "100 off".
     """
-    name = unquote(name).replace("\\", "/")
+    if decode:
+        name = unquote(name)
+    name = name.replace("\\", "/")
     name = os.path.basename(name)
     name = re.sub(r"[\x00-\x1f\x7f]", "", name).strip()
     if not name or name.startswith("."):
@@ -849,24 +1213,27 @@ def _safe_path_component(name: str) -> str:
     return name
 
 
-def download_lookup(raw: str):
+def download_lookup(raw: str, decode: bool = True):
     """Resolve a client-requested file name to a path inside UPLOAD_DIR.
 
     Returns the absolute path, or None if the name is rejected. Reuses the
     same whitelist as safe_name(), so only files uploads could have created
     are reachable; hidden names and traversal fragments never match.
-    
+
     Supports paths with directories (e.g., 'folder/file.txt').
+    With decode=False the name is taken verbatim (sealed endpoints: the path
+    travels inside the encrypted envelope, not URL-encoded on the wire).
     """
     # Unquote first to handle URL-encoded slashes (%2F)
-    raw = unquote(raw)
+    if decode:
+        raw = unquote(raw)
     # Split the path into components
     path_parts = raw.split("/")
-    
+
     # Sanitize each component
     sanitized_parts = []
     for part in path_parts:
-        sanitized = _safe_path_component(part)
+        sanitized = _safe_path_component(part, decode=decode)
         if not sanitized:
             return None
         sanitized_parts.append(sanitized)
@@ -886,6 +1253,58 @@ def download_lookup(raw: str):
         return None
     
     return path
+
+
+def _list_dir_json(dir_path: str) -> str:
+    """JSON listing of one directory, newest first; hidden names never listed."""
+    entries = []
+    try:
+        names = os.listdir(dir_path)
+    except OSError:
+        names = []
+    for name in names:
+        if name.startswith("."):
+            # hidden names are never served: in-flight upload
+            # staging files stay invisible until fully written
+            continue
+        path = os.path.join(dir_path, name)
+        try:
+            if not _inside_uploads(path):
+                continue
+            if os.path.isdir(path):
+                entries.append((os.path.getmtime(path), name, 0, True))
+            elif os.path.isfile(path):
+                entries.append((os.path.getmtime(path), name,
+                                os.path.getsize(path), False))
+        except OSError:
+            continue
+    entries.sort(reverse=True)
+    return json.dumps([{"name": n, "size": s, "is_dir": is_dir,
+                        "mtime": mtime}
+                       for mtime, n, s, is_dir in entries])
+
+
+def _resolve_ls_dir(rel_path: str, decode: bool = True):
+    """Sanitize a client-requested directory path and resolve it inside
+    UPLOAD_DIR. Returns the directory path, or None if rejected/missing."""
+    if decode:
+        rel_path = unquote(rel_path)
+    path_parts = rel_path.split("/")
+    sanitized_parts = []
+    for part in path_parts:
+        sanitized = _safe_path_component(part, decode=decode)
+        if not sanitized:
+            return None
+        sanitized_parts.append(sanitized)
+    if not sanitized_parts:
+        # List root upload directory
+        dir_path = UPLOAD_DIR
+    else:
+        dir_path = os.path.join(UPLOAD_DIR, *sanitized_parts)
+    # Security check
+    if not _inside_uploads(dir_path) or not os.path.isdir(dir_path):
+        return None
+    return dir_path
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -908,6 +1327,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         ACTIVITY.touch(self._client_ip())
         base = self.path.split("?", 1)[0]
+        if ENCRYPTED:
+            # Encrypted mode: files must not be readable without the host
+            # key — every plaintext route (page included) is a blind 404,
+            # indistinguishable from secret mode's unknown-path response.
+            self.send_error(404)
+            return
         if SECRET_TOKEN and base == "/" + SECRET_TOKEN:
             # redirect to add the trailing slash so relative URLs resolve
             self.send_response(302)
@@ -919,90 +1344,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_page(PAGE.encode("utf-8"))
             return
         if base == FILES_PATH:  # listing as JSON; the page renders it
-            entries = []
-            try:
-                names = os.listdir(UPLOAD_DIR)
-            except OSError:
-                names = []
-            for name in names:
-                if name.startswith("."):
-                    # hidden names are never served: in-flight upload
-                    # staging files stay invisible until fully written
-                    continue
-                path = os.path.join(UPLOAD_DIR, name)
-                try:
-                    if not _inside_uploads(path):
-                        continue
-                    if os.path.isdir(path):
-                        entries.append((os.path.getmtime(path), name, 0, True))
-                    elif os.path.isfile(path):
-                        entries.append((os.path.getmtime(path), name,
-                                        os.path.getsize(path), False))
-                except OSError:
-                    continue
-            entries.sort(reverse=True)
-            body = json.dumps([{"name": n, "size": s, "is_dir": is_dir, 
-                               "mtime": mtime} 
-                              for mtime, n, s, is_dir in entries])
+            body = _list_dir_json(UPLOAD_DIR)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body.encode("utf-8"))
             return
-        
         if base.startswith(FILES_LIST_PREFIX):
             # List contents of a specific directory
-            rel_path = base[len(FILES_LIST_PREFIX):]
-            # Unquote first to handle URL-encoded slashes (%2F)
-            rel_path = unquote(rel_path)
-            # Sanitize and resolve the directory path
-            path_parts = rel_path.split("/")
-            sanitized_parts = []
-            for part in path_parts:
-                sanitized = _safe_path_component(part)
-                if not sanitized:
-                    self.send_error(404)
-                    return
-                sanitized_parts.append(sanitized)
-            
-            if not sanitized_parts:
-                # List root upload directory
-                dir_path = UPLOAD_DIR
-            else:
-                dir_path = os.path.join(UPLOAD_DIR, *sanitized_parts)
-            
-            # Security check
-            if not _inside_uploads(dir_path) or not os.path.isdir(dir_path):
+            dir_path = _resolve_ls_dir(base[len(FILES_LIST_PREFIX):])
+            if dir_path is None:
                 self.send_error(404)
                 return
-            
-            entries = []
-            try:
-                names = os.listdir(dir_path)
-            except OSError:
-                names = []
-            
-            for name in names:
-                if name.startswith("."):
-                    # hidden names are never served (see FILES_PATH above)
-                    continue
-                path = os.path.join(dir_path, name)
-                try:
-                    if not _inside_uploads(path):
-                        continue
-                    if os.path.isdir(path):
-                        entries.append((os.path.getmtime(path), name, 0, True))
-                    elif os.path.isfile(path):
-                        entries.append((os.path.getmtime(path), name,
-                                        os.path.getsize(path), False))
-                except OSError:
-                    continue
-            
-            entries.sort(reverse=True)
-            body = json.dumps([{"name": n, "size": s, "is_dir": is_dir, 
-                               "mtime": mtime} 
-                              for mtime, n, s, is_dir in entries])
+            body = _list_dir_json(dir_path)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -1039,6 +1394,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         ACTIVITY.touch(self._client_ip())
+        if ENCRYPTED:
+            self._handle_sealed_post(self.path.split("?", 1)[0])
+            return
         if classify_request("POST", self.path) != "upload":
             self.send_error(404)
             return
@@ -1058,8 +1416,30 @@ class Handler(BaseHTTPRequestHandler):
         if length < 0:  # negative or non-numeric: reject, don't crash
             self.send_error(400, "Bad request")
             return
+        if MAX_UPLOAD_BYTES and length > MAX_UPLOAD_BYTES:
+            # Pre-read rejection: the whole body is read into memory before
+            # parsing otherwise, so the check must happen on the Content-
+            # Length header alone — an oversized upload costs one header,
+            # not its full size in RAM.
+            self.send_error(413, "Payload too large")
+            return
         data = self.rfile.read(length)
 
+        saved, failed = self._save_multipart(data, boundary)
+        if saved:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"OK")
+        elif failed:
+            self.send_error(500, "Save failed")
+        else:
+            self.send_error(400, "No file saved")
+
+    def _save_multipart(self, data: bytes, boundary: bytes):
+        """Parse a multipart body and save every file part through
+        save_unique(safe_name(...)) — SPEC.md rule 1 applies below the crypto
+        layer exactly as for plaintext uploads. Returns (saved, failed)."""
         # Split parts
         parts = data.split(b"--" + boundary)
         saved = 0
@@ -1090,16 +1470,126 @@ class Handler(BaseHTTPRequestHandler):
             emit_event(f"{self._client_ip()} uploaded "
                        f"{name} ({len(filedata)} B)")
             saved += 1
+        return saved, failed
 
+    # --- Sealed endpoints (encrypted mode) ----------------------------------
+    #
+    # All sealed endpoints are POST with body = request envelope
+    # ('L' ‖ ephPub ‖ nonce ‖ ct‖mac) and answer with a response envelope
+    # ('L' ‖ nonce ‖ ct‖mac). Decrypt first, then delegate into the same
+    # logic as the plaintext endpoints. AEAD failure -> plain 400 (there is
+    # no authenticated channel to seal an error into).
+
+    def _send_sealed(self, eph_pub: bytes, payload: bytes):
+        body = seal_response(payload, eph_pub, HOST_KEY)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_sealed_post(self, base: str):
+        if base not in SEALED_PATHS:
+            self.send_error(404)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            length = -1
+        if length < 0:  # negative or non-numeric: reject, don't crash
+            self.send_error(400, "Bad request")
+            return
+        if (MAX_UPLOAD_BYTES and base == S_UPLOAD_PATH
+                and length > MAX_UPLOAD_BYTES + SEAL_ENVELOPE_OVERHEAD):
+            # Pre-read rejection: a sealed envelope is exactly its plaintext
+            # plus a 61-byte header, so the size check needs no decryption —
+            # the body is never buffered for oversized uploads.
+            self.send_error(413, "Payload too large")
+            return
+        envelope = self.rfile.read(length)
+        plain = open_request(envelope, HOST_KEY)
+        if plain is None:
+            self.send_error(400, "Bad envelope")
+            return
+        eph_pub = eph_public_key_of(envelope)
+        if base == S_UPLOAD_PATH:
+            self._sealed_upload(plain, eph_pub)
+        elif base in (S_FILES_PATH, S_LS_PATH):
+            self._sealed_list(plain, base == S_FILES_PATH, eph_pub)
+        else:  # S_FL_PATH
+            self._sealed_download(plain, eph_pub)
+
+    def _sealed_upload(self, plain: bytes, eph_pub: bytes):
+        if MAX_UPLOAD_BYTES and len(plain) > MAX_UPLOAD_BYTES:
+            # Authoritative check on the decrypted payload (app parity — the
+            # app host's maxUploadBytes applies to the decrypted payload);
+            # the pre-read envelope-size check usually catches it first.
+            self.send_error(413, "Payload too large")
+            return
+        # First line of the plaintext is the multipart boundary.
+        sep = plain.find(b"\r\n")
+        if sep < 0:
+            self.send_error(400, "Bad request")
+            return
+        try:
+            boundary = plain[:sep].decode("utf-8")
+        except UnicodeDecodeError:
+            self.send_error(400, "Bad request")
+            return
+        saved, failed = self._save_multipart(plain[sep + 2:],
+                                             boundary.encode("utf-8"))
         if saved:
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain")
-            self.end_headers()
-            self.wfile.write(b"OK")
+            self._send_sealed(eph_pub, b"OK")
         elif failed:
             self.send_error(500, "Save failed")
         else:
             self.send_error(400, "No file saved")
+
+    def _sealed_list(self, plain: bytes, root: bool, eph_pub: bytes):
+        if root:
+            # sfiles carries an EMPTY plaintext by contract. The endpoint is
+            # not authenticated (no AAD), so a non-empty plaintext means the
+            # envelope was redirected from another endpoint by a path-rewriting
+            # MITM — every cross-endpoint splice must fail with a visible 4xx,
+            # never 200, or the client would believe a dropped upload succeeded.
+            if plain:
+                self.send_error(400, "Bad request")
+                return
+            body = _list_dir_json(UPLOAD_DIR).encode("utf-8")
+        else:
+            try:
+                rel_path = plain.decode("utf-8")
+            except UnicodeDecodeError:
+                self.send_error(400, "Bad request")
+                return
+            # The sealed plaintext carries the path VERBATIM (not URL-encoded
+            # like the plaintext routes), so sanitize without decoding.
+            dir_path = _resolve_ls_dir(rel_path, decode=False)
+            if dir_path is None:
+                self.send_error(404)
+                return
+            body = _list_dir_json(dir_path).encode("utf-8")
+        self._send_sealed(eph_pub, body)
+
+    def _sealed_download(self, plain: bytes, eph_pub: bytes):
+        try:
+            rel = plain.decode("utf-8")
+        except UnicodeDecodeError:
+            self.send_error(400, "Bad request")
+            return
+        path = download_lookup(rel, decode=False)
+        if path is None:
+            self.send_error(404)
+            return
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+        except OSError:
+            self.send_error(404)
+            return
+        emit_event(f"{self._client_ip()} downloaded "
+                   f"{os.path.basename(path)} ({len(data)} B)")
+        self._send_sealed(eph_pub, data)
 
     def log_message(self, fmt, *args):
         # Per-request lines are suppressed: listing polls are pure noise.
@@ -1193,7 +1683,10 @@ def _ui_loop(stdscr, url):
         log = curses.newwin(log_h, w, top_h, 0)
 
         top.erase()
-        _safe_add(top, 0, 0, f" LANdir  {url}   (q: QR on/off, Ctrl+C: stop)")
+        header = f" LANdir  {url}   (q: QR on/off, Ctrl+C: stop)"
+        if ENCRYPTED:
+            header += "   [encrypted: LANdir app required — browsers get 404]"
+        _safe_add(top, 0, 0, header)
         line = 1
         if show_qr:
             for ql in qr_lines:
@@ -1229,6 +1722,16 @@ def main():
     global PLAIN_MODE
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     url = f"http://{lan_ip()}:{PORT}{PAGE_PATH}"
+    url_with_key = advertised_url_with_key(url) if ENCRYPTED else None
+    if ENCRYPTED and url_with_key is None:
+        # The key fragment must never be truncated to fit the QR (the app
+        # host's behavior): warn and fall back to the keyless URL — the app
+        # cannot pair from this QR, but the printed URL stays scannable.
+        print("warning: URL + host key exceeds the QR capacity "
+              f"({QR_MAX_URL_BYTES} bytes); advertising the keyless URL "
+              "instead — the app cannot pair from this QR",
+              file=sys.stderr, flush=True)
+    url = url_with_key or url
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     if sys.stdout.isatty() and _curses_available():
         # Interactive terminal: full-screen UI, server on a background thread.
@@ -1246,6 +1749,15 @@ def main():
     else:
         # Piped output / no curses (container, Windows): plain filtered logs.
         print(f"Uploads directory: {UPLOAD_DIR}", flush=True)
+        if ENCRYPTED:
+            # Tell the host user how to reach an encrypted host: only a LANdir
+            # app client can — encryption is not possible in a browser over
+            # plain HTTP, so every plain-HTTP route answers 404.
+            print("Encryption mode ON: a LANdir client (app) is required to "
+                  "access this host —", flush=True)
+            print("scan the QR code with the LANdir app. Browsers cannot use "
+                  "encryption over", flush=True)
+            print("plain HTTP; all plain-HTTP routes answer 404.", flush=True)
         print(f"Open {url}  (Ctrl+C to stop)", flush=True)
         try:
             print(qr_terminal(qr_matrix(url)), flush=True)

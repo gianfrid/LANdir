@@ -217,7 +217,16 @@ class LANdirClient {
     inner[boundary.length + 1] = 0x0a;
     inner.setRange(boundary.length + 2, inner.length, body);
     final (status, opened) = await _sealedPost(_suploadUrl, inner);
-    if (status == 200 && opened != null) return true;
+    // The success payload is the sealed 'OK' — not just any authenticated
+    // 200. The endpoint is not authenticated (the envelope has no AAD), so
+    // a path-rewriting MITM could redirect the upload to another sealed
+    // endpoint whose 200 answer (e.g. a listing) must not pass as success:
+    // the file would be silently dropped.
+    if (status == 200 &&
+        opened != null &&
+        utf8.decode(opened, allowMalformed: false) == 'OK') {
+      return true;
+    }
     // Any failure here is ambiguous: the host rejected the transfer (413
     // over the size limit, 400 malformed/rejected multipart) OR our
     // envelope no longer opens there (wrong key / sealed endpoints gone).

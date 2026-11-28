@@ -12,6 +12,13 @@ qrcode = "0.14"
 clap = { version = "4", features = ["derive"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 percent-encoding = "2"
+# Sealed (encrypted) mode — the same wire protocol as the Flutter app
+# (docs/design/001-qr-paired-app-encryption.md): X25519 ‖ HKDF-SHA256 ‖
+# ChaCha20-Poly1305, fixed ciphersuite, envelopes 'L' ‖ …
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
 # TUI when attached to a terminal (pure Rust, musl-static friendly for the
 # distroless image); without a TTY the server falls back to plain log lines
 ratatui = "0.30"

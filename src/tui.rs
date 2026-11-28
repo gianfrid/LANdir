@@ -53,13 +53,13 @@ fn strip_ansi(s: &str) -> String {
     out
 }
 
-pub fn run(activity: &ActivityLog, url: &str) -> std::io::Result<()> {
+pub fn run(activity: &ActivityLog, url: &str, encrypted: bool) -> std::io::Result<()> {
     enable_raw_mode()?;
     let mut out = stdout();
     execute!(out, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(out);
     let mut terminal = Terminal::new(backend)?;
-    let result = event_loop(&mut terminal, activity, url);
+    let result = event_loop(&mut terminal, activity, url, encrypted);
     // Always restore the terminal, even if the loop errored.
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -78,6 +78,7 @@ fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     activity: &ActivityLog,
     url: &str,
+    encrypted: bool,
 ) -> std::io::Result<()> {
     // qr_terminal emits no SGR escapes (strip_ansi runs anyway so the two
     // implementations stay interchangeable), and qr_line_style() sets no
@@ -142,9 +143,13 @@ fn event_loop(
                 .constraints([Constraint::Length(top_h), Constraint::Min(3)])
                 .split(area);
 
-            let mut top: Vec<Line> = vec![Line::from(format!(
-                " LANdir  {url}   (q: QR on/off, Ctrl+C: stop)"
-            ))];
+            let mut header = format!(" LANdir  {url}   (q: QR on/off, Ctrl+C: stop)");
+            if encrypted {
+                // Tell the host user how to reach an encrypted host: only a
+                // LANdir app client can — browsers get 404 on every route.
+                header.push_str("   [encrypted: LANdir app required — browsers cannot access]");
+            }
+            let mut top: Vec<Line> = vec![Line::from(header)];
             if show_qr {
                 top.extend(qr_lines.iter().cloned());
             }

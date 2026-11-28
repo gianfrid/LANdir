@@ -24,7 +24,7 @@ _Avoid_: Peer (implies symmetric roles, which LANdir is not).
 ## Server concepts
 
 **Secret mode**:
-The default operating mode where the page and upload endpoint live under a fresh random token path (`/<token>/`) and every other path returns 404. Disabled with `--insecure` on the desktop implementations. On the app host it applies only with encryption mode OFF — encrypted hosts are key-only and skip the token entirely (fixed root paths, ADR 0003).
+The default operating mode of the CLI hosts where the page and upload endpoint live under a fresh random token path (`/<token>/`) and every other path returns 404. Disabled with `--insecure` on the desktop implementations. In encryption mode (app toggle, or `--encrypt` on the CLI hosts) it is inert — encrypted hosts are key-only and skip the token entirely (fixed root paths, ADR 0003/0004).
 _Avoid_: Auth mode, password mode (it is a capability URL, not authentication).
 
 **FileSink**:
@@ -58,8 +58,8 @@ The scenario where the Host phone runs a WiFi hotspot (Android `LocalOnlyHotspot
 _Avoid_: Tethering (broader than what LANdir needs).
 
 **Host key**:
-The long-term X25519 identity of a Host, generated on first run, persisted in the app-support directory (never under `uploads/`), and delivered out-of-band via the QR code fragment (`#k=`). App clients pin it; pinned servers are always contacted over the sealed endpoints.
-_Avoid_: Server key (the CLI hosts have no key).
+The long-term X25519 identity of a Host, generated on first run, persisted outside `uploads/` (app-support directory on the app; `$LANDIR_KEY_DIR` / XDG config dir / next-to-uploads `.landir/` on the CLI hosts — never under `uploads/`), and delivered out-of-band via the QR code fragment (`#k=`). App clients pin it; pinned servers are always contacted over the sealed endpoints. Exists only when the host's encryption mode is on.
+_Avoid_: Server key.
 
 **Pairing**:
 The scan that binds a host address (host, port — never the per-run token) to its Host key in the client registry. A rescan presenting a different key for the same address blocks and requires explicit re-pairing.

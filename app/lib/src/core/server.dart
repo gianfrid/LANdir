@@ -423,6 +423,18 @@ class LANdirServer {
       // The sealed plaintext carries the path VERBATIM (not URL-encoded
       // like the plaintext routes), so sanitize without percent-decoding —
       // a real folder named "100%20off" must not be mangled to "100 off".
+      //
+      // sfiles lists the root by contract and must carry an EMPTY plaintext:
+      // the endpoint is not authenticated (the envelope has no AAD), so a
+      // non-empty plaintext means the envelope was redirected from another
+      // endpoint by a path-rewriting MITM. Every cross-endpoint splice must
+      // fail with a visible 4xx, never 200 — a 200 here would make the
+      // client believe a dropped upload succeeded (or save the listing as
+      // the downloaded file).
+      if (base == '${p}sfiles' && plain.isNotEmpty) {
+        _sendError(req, 400);
+        return;
+      }
       final json = base == '${p}sfiles'
           ? await _listingJsonBytes('')
           : await _listingJsonBytesForPath(utf8.decode(plain), decode: false);
