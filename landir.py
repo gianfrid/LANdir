@@ -147,7 +147,13 @@ def classify_request(command, path):
 
 
 def emit_event(text):
-    """Record an event; in plain mode also print it as a log line."""
+    """Record an event; in plain mode also print it as a log line.
+
+    Control characters are stripped first: event text embeds client-
+    supplied names and paths, and raw bytes like ESC must never reach a
+    terminal (plain-mode log lines) or the curses UI.
+    """
+    text = re.sub(r"[\x00-\x1f\x7f]", "", text)
     ACTIVITY.add_event(text)
     if PLAIN_MODE:
         stamp = datetime.now().strftime("%H:%M:%S")
@@ -756,24 +762,70 @@ def safe_name(name: str) -> str:
     return os.path.basename(path)
 
 
+def _stage_temp(data: bytes) -> str:
+    """Write an upload body to a unique hidden temp file inside UPLOAD_DIR.
+
+    Staging in the same directory (same filesystem) keeps the atomic
+    publish below possible; the dot prefix keeps in-flight uploads out
+    of the listings, which filter hidden names.
+    """
+    while True:
+        tmp = os.path.join(
+            UPLOAD_DIR, ".landir_tmp_%s_%d"
+            % (datetime.now().strftime("%Y%m%d_%H%M%S_%f"), os.getpid()))
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            continue  # same-microsecond collision: re-roll the name
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(data)
+        except OSError:
+            os.unlink(tmp)
+            raise
+        return tmp
+
+
+def _publish(tmp: str, target: str) -> bool:
+    """Publish a staged file under its final name; False if already taken.
+
+    os.link is the atomic publication step: it fails with FileExistsError
+    instead of overwriting (SPEC rule 4), so a concurrent same-name upload
+    can never clobber an existing file.
+    """
+    try:
+        os.link(tmp, target)
+        return True
+    except FileExistsError:
+        return False
+    except OSError:
+        # Filesystem without hardlink support (e.g. vfat/exfat): fall back
+        # to a checked rename. The exists() race window is microscopic and
+        # the suffix re-roll in save_unique still guarantees uniqueness.
+        if os.path.exists(target):
+            return False
+        os.rename(tmp, target)
+        return True
+
+
 def save_unique(name: str, data: bytes):
     """Write data to a not-yet-existing file in UPLOAD_DIR, never overwriting.
 
-    Creates the file exclusively (O_EXCL) and, if another upload claimed the
-    name in the meantime, retries with a fresh microsecond-timestamp suffix.
-    Returns the name actually used, or None if no free name could be claimed.
+    The body is staged in a hidden temp file and only becomes visible
+    under its final name once fully written (atomic link), so concurrent
+    listings and downloads never see a partial file. If another upload
+    claimed the name in the meantime, retries with a fresh
+    microsecond-timestamp suffix. Returns the name actually used, or
+    None if no free name could be claimed.
     """
     for _ in range(100):
-        target = os.path.join(UPLOAD_DIR, name)
-        try:
-            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        except FileExistsError:
-            stem, ext = os.path.splitext(name)
-            name = f"{stem}_{datetime.now():%Y%m%d_%H%M%S_%f}{ext}"
-            continue
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(data)
-        return name
+        tmp = _stage_temp(data)
+        if _publish(tmp, os.path.join(UPLOAD_DIR, name)):
+            os.unlink(tmp)  # data lives under the published name now
+            return name
+        os.unlink(tmp)  # name claimed: restage under a fresh suffix
+        stem, ext = os.path.splitext(name)
+        name = f"{stem}_{datetime.now():%Y%m%d_%H%M%S_%f}{ext}"
     return None
 
 
@@ -837,6 +889,12 @@ def download_lookup(raw: str):
 
 
 class Handler(BaseHTTPRequestHandler):
+    # A stalled client (promised a Content-Length, then went silent) must not
+    # pin a handler thread forever. StreamRequestHandler applies this as a
+    # per-recv socket timeout; BaseHTTPRequestHandler converts the resulting
+    # socket.timeout into a clean connection close.
+    timeout = 60
+
     def send_page(self, body):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -867,6 +925,10 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 names = []
             for name in names:
+                if name.startswith("."):
+                    # hidden names are never served: in-flight upload
+                    # staging files stay invisible until fully written
+                    continue
                 path = os.path.join(UPLOAD_DIR, name)
                 try:
                     if not _inside_uploads(path):
@@ -922,6 +984,9 @@ class Handler(BaseHTTPRequestHandler):
                 names = []
             
             for name in names:
+                if name.startswith("."):
+                    # hidden names are never served (see FILES_PATH above)
+                    continue
                 path = os.path.join(dir_path, name)
                 try:
                     if not _inside_uploads(path):
@@ -949,14 +1014,23 @@ class Handler(BaseHTTPRequestHandler):
             if path is None:
                 self.send_error(404)
                 return
-            size = os.path.getsize(path)
-            self.send_response(200)
-            self.send_header("Content-Type", "application/octet-stream")
-            self.send_header("Content-Disposition", 'attachment; filename="%s"'
-                             % os.path.basename(path))
-            self.send_header("Content-Length", str(size))
-            self.end_headers()
-            with open(path, "rb") as fh:
+            # Open first and fstat the open file (not the path): a file that
+            # vanishes between lookup and open answers a clean 404, and the
+            # size is taken from the very file being served.
+            try:
+                fh = open(path, "rb")
+            except OSError:
+                self.send_error(404)
+                return
+            with fh:
+                size = os.fstat(fh.fileno()).st_size
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Disposition",
+                                 'attachment; filename="%s"'
+                                 % os.path.basename(path))
+                self.send_header("Content-Length", str(size))
+                self.end_headers()
                 shutil.copyfileobj(fh, self.wfile)
             emit_event(f"{self._client_ip()} downloaded "
                        f"{os.path.basename(path)} ({size} B)")
@@ -989,28 +1063,41 @@ class Handler(BaseHTTPRequestHandler):
         # Split parts
         parts = data.split(b"--" + boundary)
         saved = 0
+        failed = False
         for part in parts:
             if b"filename=" not in part:
                 continue
             try:
                 header_blob, _, filedata = part.partition(b"\r\n\r\n")
                 filedata = filedata.rsplit(b"\r\n", 1)[0]
-                nm = re.search(rb'filename="([^"]*)"', header_blob).group(1)
-                name = save_unique(safe_name(nm.decode("utf-8", "replace")),
-                                   filedata)
-                if name is None:
+                m = re.search(rb'filename="([^"]*)"', header_blob)
+                if m is None:  # filename= present but malformed: skip the part
                     continue
-                emit_event(f"{self._client_ip()} uploaded "
-                           f"{name} ({len(filedata)} B)")
-                saved += 1
-            except Exception:
+                nm = m.group(1).decode("utf-8", "replace")
+                name = save_unique(safe_name(nm), filedata)
+            except ValueError:
+                # safe_name rejected the name (defense in depth): the
+                # client's fault, skip the part silently
                 continue
+            except OSError as e:
+                # server-side save failure (disk full, uploads dir gone, …):
+                # surface it instead of misreporting a client error
+                emit_event(f"{self._client_ip()} save failed for {nm!r}: {e!r}")
+                failed = True
+                continue
+            if name is None:
+                continue
+            emit_event(f"{self._client_ip()} uploaded "
+                       f"{name} ({len(filedata)} B)")
+            saved += 1
 
         if saved:
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(b"OK")
+        elif failed:
+            self.send_error(500, "Save failed")
         else:
             self.send_error(400, "No file saved")
 

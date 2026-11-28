@@ -429,6 +429,23 @@ class SafeNameTests(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "exists.txt")))
         self.assertTrue(os.path.exists(os.path.join(self.tmp.name, first)))
 
+    def test_symlink_escape_rejected(self):
+        # defense in depth (SPEC rule 1): a symlink planted inside the
+        # uploads dir must not make safe_name/download_lookup resolve
+        # outside it — this is the containment branch's whole purpose
+        try:
+            os.symlink("/etc/passwd", os.path.join(self.tmp.name, "evil"))
+        except OSError:  # pragma: no cover - no symlink support (e.g. vfat)
+            self.skipTest("symlinks not supported here")
+        with self.assertRaises(ValueError):
+            self.fds.safe_name("evil")
+        self.assertIsNone(self.fds.download_lookup("evil"))
+        # a dangling symlink is rejected too (never written through)
+        os.symlink("/nonexistent-target-xyz",
+                   os.path.join(self.tmp.name, "dangling"))
+        with self.assertRaises(ValueError):
+            self.fds.safe_name("dangling")
+
     def test_download_lookup(self):
         good = os.path.join(self.tmp.name, "good file (1) [x].txt")
         open(good, "w").close()
@@ -538,6 +555,33 @@ class PlainServerTests(ServerTestBase):
                       resp.getheader("Content-Disposition"))
         self.assertEqual(int(resp.getheader("Content-Length")), 9)
 
+    def test_upload_leaves_no_staging_files(self):
+        # the body is staged in a hidden temp file and published atomically:
+        # nothing lingers besides the final name
+        self.upload_ok("/upload", "atomic.txt", b"fully written")
+        files = self.saved_files()
+        self.assertIn("atomic.txt", files)
+        self.assertFalse([f for f in files if f.startswith(".landir_tmp")],
+                         "staging files must not linger after publish")
+        self.assertEqual(self.read_saved("atomic.txt"), b"fully written")
+
+    def test_listing_hides_hidden_names(self):
+        # dot-prefixed files (incl. any in-flight staging temps) never
+        # appear in the /files or /ls/ listings, and are not downloadable
+        with open(os.path.join(self.upload_dir.name, ".hidden.txt"), "wb") as f:
+            f.write(b"secret")
+        os.makedirs(os.path.join(self.upload_dir.name, "hidsub"), exist_ok=True)
+        with open(os.path.join(self.upload_dir.name, "hidsub", ".in.txt"),
+                  "wb") as f:
+            f.write(b"inner secret")
+        self.upload_ok("/upload", "shown.txt", b"data")
+        names = [it["name"] for it in json.loads(self.get("/files").read())]
+        self.assertIn("shown.txt", names)
+        self.assertNotIn(".hidden.txt", names)
+        sub = [it["name"] for it in json.loads(self.get("/ls/hidsub").read())]
+        self.assertEqual(sub, [])  # only the hidden file is in there
+        self.assertEqual(self.get("/fl/.hidden.txt").status, 404)
+
     def test_download_traversal_rejected(self):
         self.upload_ok("/upload", "guard.bin", b"contained")
         for frag in ("..%2flandir.py", "sub/../../landir.py",
@@ -549,6 +593,22 @@ class PlainServerTests(ServerTestBase):
                 self.assertEqual(resp.status, 404)
         # a name that exists only outside the uploads dir never resolves
         self.assertEqual(self.get("/fl/landir.py").status, 404)
+
+    def test_symlink_escape_endpoints_404(self):
+        # endpoints must not serve (or even list) a symlink that resolves
+        # outside the uploads dir
+        try:
+            os.symlink("/etc/hostname",
+                       os.path.join(self.upload_dir.name, "evil.txt"))
+            os.symlink("/etc", os.path.join(self.upload_dir.name, "etcdir"))
+        except OSError:  # pragma: no cover - no symlink support (e.g. vfat)
+            self.skipTest("symlinks not supported here")
+        self.assertEqual(self.get("/fl/evil.txt").status, 404)
+        self.assertEqual(self.get("/ls/etcdir").status, 404)
+        self.assertEqual(self.get("/fl/etcdir/passwd").status, 404)
+        names = [it["name"] for it in json.loads(self.get("/files").read())]
+        self.assertNotIn("evil.txt", names)
+        self.assertNotIn("etcdir", names)
 
     def test_download_hidden_or_unknown_404(self):
         for name in (".bashrc", "nope.txt", "sub/zz.txt"):
@@ -569,6 +629,35 @@ class PlainServerTests(ServerTestBase):
         self.assertEqual(len(files), 2)
         contents = sorted(self.read_saved(f) for f in files)
         self.assertEqual(contents, [b"version-1", b"version-2"])
+
+    def test_concurrent_same_name_uploads_never_collide(self):
+        # SPEC rule 4: exclusive creation + suffix re-roll means N threads
+        # uploading the same name must yield N distinct files, each content
+        # preserved exactly once — no overwrite, no interleaving
+        n = 8
+        contents = [f"payload-{i}".encode() for i in range(n)]
+        errors = []
+
+        def worker(i):
+            try:
+                body, ctype = multipart("race.bin", contents[i])
+                resp = self.post_upload("/upload", body, ctype)
+                if resp.status != 200:
+                    errors.append(f"worker {i}: status {resp.status}")
+                resp.read()
+            except Exception as e:  # pragma: no cover - failure detail
+                errors.append(f"worker {i}: {e!r}")
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+        self.assertEqual(errors, [])
+        files = [f for f in self.saved_files() if f.startswith("race")]
+        self.assertEqual(len(files), n, files)
+        got = sorted(self.read_saved(f) for f in files)
+        self.assertEqual(got, sorted(contents))
 
     def test_upload_traversal_lands_inside(self):
         self.upload_ok("/upload", "../../pwn", b"pwned")
@@ -816,6 +905,13 @@ class ActivityTrackingTests(ServerTestBase):
         self.fail(f"event {needle!r} not recorded: {self._events()}")
 
     def test_events_and_presence(self):
+        # the ACTIVITY log is shared across this class's tests: only events
+        # recorded during THIS test are asserted on
+        baseline = set(self._events())
+
+        def fresh():
+            return [e for e in self._events() if e not in baseline]
+
         self.upload_ok("/upload", "a.txt", b"abc")
         os.mkdir(os.path.join(self.upload_dir.name, "sub"))
         self.get("/files")
@@ -825,24 +921,88 @@ class ActivityTrackingTests(ServerTestBase):
         self.assertEqual(resp.status, 200)
         resp.read()
         self._wait_for_event("downloaded a.txt")
-        events = self._events()
+        events = fresh()
         self.assertTrue(any("127.0.0.1 uploaded a.txt (3 B)" in e
                             for e in events), events)
         self.assertTrue(any("127.0.0.1 downloaded a.txt (3 B)" in e
                             for e in events), events)
         # listing polls and page loads produce no log lines
-        self.assertFalse(any("/files" in e or "/ls/" in e or '"GET' in e
-                             for e in events), events)
+        self.assertFalse(any("/files" in e or "/ls/" in e for e in events),
+                         events)
+        # error events have the shape "IP GET /path -> code"; none yet
+        self.assertFalse(
+            any(re.search(r"\bGET .* -> [45]\d\d", e) for e in events),
+            events)
         # every request (including the quiet ones) refreshed presence
         self.assertIn("127.0.0.1", self.fds.ACTIVITY.online())
         # errors are logged with the client IP
         resp = self.get("/fl/nope.txt")
         self.assertEqual(resp.status, 404)
         resp.read()
-        self._wait_for_event("-> 404")
-        events = self._events()
+        self._wait_for_event("GET /fl/nope.txt -> 404")
+        events = fresh()
         self.assertTrue(any("127.0.0.1" in e and "-> 404" in e for e in events),
                         events)
+
+    def test_event_control_chars_stripped(self):
+        # event text embeds client-supplied paths/names: raw control bytes
+        # (terminal escape sequences) must never reach a log or the UI pane
+        self.fds.emit_event("x\x1b]52;c;oops\x07 y\x00z")
+        self.assertTrue(any(e == "x]52;c;oops yz" for e in self._events()),
+                        self._events())
+
+    def test_stalled_upload_connection_closed(self):
+        # a client that promises a body then stalls must not pin the
+        # handler thread forever: the socket timeout closes the connection
+        self.fds.Handler.timeout = 2
+        try:
+            s = socket.create_connection(("127.0.0.1", self.port), timeout=10)
+            s.sendall(b"POST /upload HTTP/1.1\r\nHost: x\r\n"
+                      b"Content-Type: multipart/form-data; boundary=B\r\n"
+                      b"Content-Length: 100\r\n\r\n"
+                      b"partial")
+            deadline = time.time() + 8
+            closed = False
+            while time.time() < deadline:
+                if not s.recv(1):  # server closed the connection
+                    closed = True
+                    break
+            s.close()
+            self.assertTrue(closed, "connection was not closed on stall")
+        finally:
+            self.fds.Handler.timeout = 60
+
+    def test_download_vanished_file_is_clean_404(self):
+        # a file that vanishes between lookup and open must answer a clean
+        # 404 — not an unhandled OSError and a reset connection
+        orig = self.fds.download_lookup
+        self.fds.download_lookup = lambda raw: os.path.join(
+            self.upload_dir.name, "gone.txt")
+        try:
+            resp = self.get("/fl/gone.txt")
+            self.assertEqual(resp.status, 404)
+            resp.read()
+        finally:
+            self.fds.download_lookup = orig
+
+    def test_upload_save_failure_is_500_with_event(self):
+        # a server-side save failure (disk full, uploads dir gone) must
+        # surface as a 500 with an event — not as a client-error 400
+        orig = self.fds.save_unique
+        def boom(name, data):
+            raise OSError(28, "No space left on device")
+        self.fds.save_unique = boom
+        try:
+            body, ctype = multipart("fail.txt", b"x")
+            resp = self.post_upload("/upload", body, ctype)
+            self.assertEqual(resp.status, 500)
+            resp.read()
+        finally:
+            self.fds.save_unique = orig
+        self._wait_for_event("save failed for 'fail.txt'")
+        # the client is not misreported: no "No file saved" 400 was sent
+        self.assertFalse(any("No file saved" in e for e in self._events()),
+                         self._events())
 
 
 class ClassifyRequestTests(unittest.TestCase):
