@@ -74,9 +74,14 @@ CLI hosts' out-of-the-box client is a browser, and with encryption on browsers
 get only 404s. When `--encrypt` is active, the startup output (plain and
 full-screen UI) tells the host user exactly that:
 
-> Encryption mode ON: a LANdir client (app) is required to access this host —
-> scan the QR code with the LANdir app. Browsers cannot use encryption over
-> plain HTTP; all plain-HTTP routes answer 404.
+> Encryption mode ON: LANdir app required — scan the QR; browsers get 404.
+
+(One short line in the plain log output, so it never wraps mid-sentence on a
+narrow terminal; in the full-screen UI the header line is
+` LANdir   [encrypted: LANdir app only — browsers get 404]   <keyless URL>   (q: QR on/off, Ctrl+C: stop)`
+— the mode tag sits first so terminal-width truncation cannot cut it off, and
+the keyless URL is shown there because the QR already carries the `#k=`
+fragment.)
 
 ## Consequences
 

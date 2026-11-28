@@ -74,6 +74,19 @@ fn qr_line_style() -> ratatui::style::Style {
     ratatui::style::Style::new()
 }
 
+/// Header line. Shows the keyless URL (the QR carries the #k= fragment); in
+/// encrypted mode the mode tag goes first so terminal-width truncation can
+/// never cut it off. Tells the host user that only a LANdir app client can
+/// reach an encrypted host — browsers get 404 on every route.
+fn header_line(url: &str, encrypted: bool) -> String {
+    let display_url = url.split('#').next().unwrap_or(url);
+    if encrypted {
+        format!(" LANdir   [encrypted: LANdir app only — browsers get 404]   {display_url}   (q: QR on/off, Ctrl+C: stop)")
+    } else {
+        format!(" LANdir  {display_url}   (q: QR on/off, Ctrl+C: stop)")
+    }
+}
+
 fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     activity: &ActivityLog,
@@ -143,12 +156,7 @@ fn event_loop(
                 .constraints([Constraint::Length(top_h), Constraint::Min(3)])
                 .split(area);
 
-            let mut header = format!(" LANdir  {url}   (q: QR on/off, Ctrl+C: stop)");
-            if encrypted {
-                // Tell the host user how to reach an encrypted host: only a
-                // LANdir app client can — browsers get 404 on every route.
-                header.push_str("   [encrypted: LANdir app required — browsers cannot access]");
-            }
+            let header = header_line(url, encrypted);
             let mut top: Vec<Line> = vec![Line::from(header)];
             if show_qr {
                 top.extend(qr_lines.iter().cloned());
@@ -182,6 +190,18 @@ mod tests {
         assert!(!term_is_usable(&Some("dumb".into())));
         assert!(!term_is_usable(&Some("".into())));
         assert!(!term_is_usable(&None));
+    }
+
+    #[test]
+    fn encrypted_header_keeps_mode_tag_visible_and_drops_key_fragment() {
+        let h = header_line("http://10.0.0.9:8000/#k=AAAA", true);
+        // Tag sits right after "LANdir" so an 80-column truncation keeps it.
+        assert!(h.starts_with(" LANdir   [encrypted: LANdir app only — browsers get 404]"));
+        // The key fragment is only in the QR, not in the header line.
+        assert!(!h.contains("#k="));
+        assert!(h.contains("http://10.0.0.9:8000/"));
+        let plain = header_line("http://10.0.0.9:8000/tok/", false);
+        assert_eq!(plain, " LANdir  http://10.0.0.9:8000/tok/   (q: QR on/off, Ctrl+C: stop)");
     }
 
     #[test]

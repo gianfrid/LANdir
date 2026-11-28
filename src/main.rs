@@ -233,6 +233,14 @@ fn advertised_url(origin: &str, page: &str, host_key: Option<&crypto::HostKey>) 
     }
 }
 
+/// One-line encrypted-mode startup notice. Kept to a single short line:
+/// multi-line prose wraps mid-sentence and becomes unreadable on narrow
+/// terminals. Must still say explicitly that a LANdir app client is required
+/// (SPEC.md: an encrypted host is only reachable with the app).
+fn encrypt_notice() -> String {
+    "Encryption mode ON: LANdir app required — scan the QR; browsers get 404.".to_string()
+}
+
 fn lan_ip() -> String {
     match std::net::UdpSocket::bind("0.0.0.0:0") {
         Ok(s) => match s.connect("8.8.8.8:80").and_then(|_| s.local_addr()) {
@@ -362,16 +370,16 @@ async fn main() {
     }
 
     // No TTY (container logs, pipes): plain filtered log lines.
-    println!("Uploads directory: {}", upload_dir.display());
+    println!("Uploads directory: {}   (Ctrl+C to stop)", upload_dir.display());
     if cli.encrypt {
         // Tell the host user how to reach an encrypted host: only a LANdir
         // app client can — encryption is not possible in a browser over
         // plain HTTP, so every plain-HTTP route answers 404.
-        println!("Encryption mode ON: a LANdir client (app) is required to access this host —");
-        println!("scan the QR code with the LANdir app. Browsers cannot use encryption over");
-        println!("plain HTTP; all plain-HTTP routes answer 404.");
+        println!("{}", encrypt_notice());
     }
-    println!("Open {url}  (Ctrl+C to stop)");
+    // No trailing hint on the Open line: in encrypted mode the URL carries
+    // the 43-char #k= fragment and would wrap mid-key on an 80-column terminal.
+    println!("Open {url}");
     match qr::qr_terminal(&url) {
         Ok(q) => println!("{q}"),
         Err(e) => println!("(no QR code: {e})"),
@@ -389,6 +397,15 @@ async fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn encrypt_notice_is_one_short_line() {
+        let n = encrypt_notice();
+        assert!(!n.contains('\n'), "notice must be a single line: {n:?}");
+        assert!(n.contains("LANdir app"), "must name the app client: {n:?}");
+        assert!(n.contains("404"), "must state browsers get 404: {n:?}");
+        assert!(n.chars().count() <= 80, "must fit an 80-column terminal: {n:?}");
+    }
 
     #[test]
     fn override_origin_replaces_host_and_port() {

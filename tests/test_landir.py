@@ -889,6 +889,46 @@ class StartupSmokeTest(unittest.TestCase):
                 proc.wait(timeout=5)
 
 
+class StartupEncryptSmokeTest(unittest.TestCase):
+    def test_encrypt_notice_is_one_short_line(self):
+        # The encrypt-mode startup notice must stay a single short line:
+        # multi-line prose wraps mid-sentence on narrow terminals.
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        with tempfile.TemporaryDirectory() as updir:
+            proc = subprocess.Popen(
+                [sys.executable, SERVER, "--port", str(port),
+                 "--dir", updir, "--encrypt"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            try:
+                deadline = time.time() + 10
+                out = b""
+                while time.time() < deadline:
+                    line = proc.stdout.readline()
+                    if not line:
+                        break
+                    out += line
+                    text = out.decode()
+                    if "(no QR" in line.decode() or "▀" in text:
+                        break
+                text = out.decode()
+                notice = [ln for ln in text.splitlines()
+                          if ln.startswith("Encryption mode ON")]
+                self.assertEqual(1, len(notice),
+                                 f"encrypt notice must be one line: {text!r}")
+                self.assertIn("LANdir app", notice[0])
+                self.assertIn("404", notice[0])
+                self.assertLessEqual(len(notice[0]), 80)
+                # the QR/printed URL still carries the host key fragment
+                self.assertRegex(text, rf"Open http://[\d.]+:{port}/#k=")
+            finally:
+                proc.stdout.close()
+                proc.terminate()
+                proc.wait(timeout=5)
+
+
 class ActivityTrackingTests(ServerTestBase):
     secret = ("--insecure",)
 

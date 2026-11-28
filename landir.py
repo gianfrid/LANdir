@@ -1683,9 +1683,15 @@ def _ui_loop(stdscr, url):
         log = curses.newwin(log_h, w, top_h, 0)
 
         top.erase()
-        header = f" LANdir  {url}   (q: QR on/off, Ctrl+C: stop)"
+        # The header shows the keyless URL (the QR carries the #k= fragment);
+        # in encrypted mode the mode tag goes first so terminal-width
+        # truncation can never cut it off.
+        display_url = url.split("#", 1)[0]
         if ENCRYPTED:
-            header += "   [encrypted: LANdir app required — browsers get 404]"
+            header = (f" LANdir   [encrypted: LANdir app only — browsers get 404]"
+                      f"   {display_url}   (q: QR on/off, Ctrl+C: stop)")
+        else:
+            header = f" LANdir  {display_url}   (q: QR on/off, Ctrl+C: stop)"
         _safe_add(top, 0, 0, header)
         line = 1
         if show_qr:
@@ -1748,17 +1754,17 @@ def main():
         print("Stopped.")
     else:
         # Piped output / no curses (container, Windows): plain filtered logs.
-        print(f"Uploads directory: {UPLOAD_DIR}", flush=True)
+        print(f"Uploads directory: {UPLOAD_DIR}   (Ctrl+C to stop)", flush=True)
         if ENCRYPTED:
             # Tell the host user how to reach an encrypted host: only a LANdir
             # app client can — encryption is not possible in a browser over
-            # plain HTTP, so every plain-HTTP route answers 404.
-            print("Encryption mode ON: a LANdir client (app) is required to "
-                  "access this host —", flush=True)
-            print("scan the QR code with the LANdir app. Browsers cannot use "
-                  "encryption over", flush=True)
-            print("plain HTTP; all plain-HTTP routes answer 404.", flush=True)
-        print(f"Open {url}  (Ctrl+C to stop)", flush=True)
+            # plain HTTP, so every plain-HTTP route answers 404. One line:
+            # long prose wraps unreadably on narrow terminals.
+            print("Encryption mode ON: LANdir app required — scan the QR; "
+                  "browsers get 404.", flush=True)
+        # No trailing hint here: in encrypted mode the URL carries the 43-char
+        # #k= fragment and would wrap mid-key on an 80-column terminal.
+        print(f"Open {url}", flush=True)
         try:
             print(qr_terminal(qr_matrix(url)), flush=True)
         except ValueError as exc:
